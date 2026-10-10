@@ -1,0 +1,16 @@
+# Dependencies
+node_modules/
+
+# Environment files — never commit real credentials
+.env
+.env.*
+!.env.example
+
+# Client build output (arrives in a later week)
+client/dist/
+
+# Logs
+*.log
+
+# OS junk
+.DS_Store
