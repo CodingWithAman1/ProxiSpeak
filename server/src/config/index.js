@@ -3,8 +3,9 @@
  * (server/.env wins over the repo-root .env). Nothing else in the codebase
  * reads process.env directly.
  *
- * Day 1: only the HTTP server knobs exist. Mongo/Redis/socket config blocks
- * are added on the days that actually introduce those dependencies.
+ * Day 2 adds the mongo block (connection lifecycle). The world-projection and
+ * Redis/socket config blocks are added on the days that actually introduce
+ * those dependencies.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -59,6 +60,13 @@ export const config = Object.freeze({
      * down to the listed origins.
      */
     clientOrigins: list('CLIENT_URL', ''),
+  }),
+
+  mongo: Object.freeze({
+    // Remote-capable connection string (local mongod or Atlas). Never logged
+    // verbatim — db/mongo.js redacts credentials before any output.
+    uri: str('MONGO_URI', 'mongodb://127.0.0.1:27017/proxispeak'),
+    serverSelectionTimeoutMS: num('MONGO_TIMEOUT_MS', 8000, { min: 500 }),
   }),
 });
 
