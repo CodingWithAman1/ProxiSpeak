@@ -19,7 +19,7 @@ async function main() {
   // The geospatial engine is useless without its indexes, so create them on
   // every boot (idempotent) rather than relying on a manual migration.
   await ensureIndexes();
-  log.info('MongoDB connected, indexes ensured');
+  log.info('MongoDB indexes ready (UserPresence.location: 2dsphere)');
 
   const httpServer = http.createServer();
   const app = createApp({ config, logger: log });

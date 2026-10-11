@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import config from '../config/index.js';
 import logger from '../utils/logger.js';
 import UserPresence from '../models/UserPresence.js';
+import Room from '../models/Room.js';
 
 mongoose.set('strictQuery', true);
 
@@ -48,8 +49,11 @@ export async function disconnectMongo() {
  * manual migration step.
  */
 export async function ensureIndexes() {
-  const presence = await UserPresence.createIndexes();
-  return { presence };
+  const [presence, room] = await Promise.all([
+    UserPresence.createIndexes(),
+    Room.createIndexes(),
+  ]);
+  return { presence, room };
 }
 
 export { mongoose, redact as redactUri };
