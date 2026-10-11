@@ -9,6 +9,7 @@
   "scripts": {
     "start": "node server/src/index.js",
     "dev:server": "npm --prefix server run dev",
-    "test": "npm --prefix server test"
+    "test": "npm --prefix server test",
+    "seed": "npm --prefix server run seed"
   }
 }
