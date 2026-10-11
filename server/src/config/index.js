@@ -3,8 +3,9 @@
  * (server/.env wins over the repo-root .env). Nothing else in the codebase
  * reads process.env directly.
  *
- * Day 1: only the HTTP server knobs exist. Mongo/Redis/socket config blocks
- * are added on the days that actually introduce those dependencies.
+ * Day 2 adds the mongo block (connection lifecycle). The world-projection and
+ * Redis/socket config blocks are added on the days that actually introduce
+ * those dependencies.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -59,6 +60,24 @@ export const config = Object.freeze({
      * down to the listed origins.
      */
     clientOrigins: list('CLIENT_URL', ''),
+  }),
+
+  mongo: Object.freeze({
+    // Remote-capable connection string (local mongod or Atlas). Never logged
+    // verbatim — db/mongo.js redacts credentials before any output.
+    uri: str('MONGO_URI', 'mongodb://127.0.0.1:27017/proxispeak'),
+    serverSelectionTimeoutMS: num('MONGO_TIMEOUT_MS', 8000, { min: 500 }),
+  }),
+
+  world: Object.freeze({
+    // Tangent-plane projection the 2dsphere schema depends on: the pixel
+    // plane is mapped onto a tiny globe patch centred on (centerLat,
+    // centerLon). 10 pixels per metre === 1 px is exactly 0.1 m to MongoDB.
+    width: num('WORLD_WIDTH', 1920, { min: 200 }),
+    height: num('WORLD_HEIGHT', 1080, { min: 200 }),
+    centerLat: num('WORLD_CENTER_LAT', 37.7749, { min: -90, max: 90 }),
+    centerLon: num('WORLD_CENTER_LON', -122.4194, { min: -180, max: 180 }),
+    pixelsPerMeter: num('PIXELS_PER_METER', 10, { min: 0.0001, max: 1e6 }),
   }),
 });
 

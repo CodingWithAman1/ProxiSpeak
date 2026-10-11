@@ -1,0 +1,50 @@
+/**
+ * Avatar position persistence (Day-2 slice of the presence store).
+ *
+ * The geospatial schema only needs two MongoDB writes to be useful: upsert one
+ * avatar's position (pixel coordinates plus the projected GeoJSON point that
+ * the 2dsphere index is built on) and remove one avatar.
+ *
+ * The in-memory hot path, the batched flush interval and the stale-presence
+ * sweeps arrive with the Socket.io presence day; the $near / $geoWithin reads
+ * arrive with the proximity services. Nothing here queries by location yet.
+ */
+import UserPresence from '../models/UserPresence.js';
+
+/** Everything needed to rebuild a MongoDB document for one user. */
+export function toPresenceDocument(user, transform) {
+  const [lon, lat] = transform.pixelToGeo(user.x, user.y);
+  return {
+    sessionId: user.id,
+    instanceId: user.instanceId ?? '',
+    roomId: user.roomId,
+    name: user.name,
+    color: user.color,
+    avatar: user.avatar ?? 'circle',
+    x: user.x,
+    y: user.y,
+    angle: user.angle ?? 0,
+    location: { type: 'Point', coordinates: [lon, lat] },
+    micEnabled: user.micEnabled !== false,
+    lastSeen: new Date(user.lastSeen ?? Date.now()),
+  };
+}
+
+/**
+ * Upsert one user's position. The filter is the unique (sessionId, roomId)
+ * pair, so the first write inserts and every later move just updates; the
+ * GeoJSON point always agrees with the authoritative x/y pixels.
+ */
+export async function upsertPosition(user, transform) {
+  const doc = toPresenceDocument(user, transform);
+  return UserPresence.updateOne(
+    { sessionId: doc.sessionId, roomId: doc.roomId },
+    { $set: doc },
+    { upsert: true },
+  );
+}
+
+/** Delete a user's presence document (called when the socket disconnects). */
+export async function removeUser(sessionId) {
+  return UserPresence.deleteOne({ sessionId });
+}
