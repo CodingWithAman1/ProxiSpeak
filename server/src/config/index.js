@@ -68,6 +68,17 @@ export const config = Object.freeze({
     uri: str('MONGO_URI', 'mongodb://127.0.0.1:27017/proxispeak'),
     serverSelectionTimeoutMS: num('MONGO_TIMEOUT_MS', 8000, { min: 500 }),
   }),
+
+  world: Object.freeze({
+    // Tangent-plane projection the 2dsphere schema depends on: the pixel
+    // plane is mapped onto a tiny globe patch centred on (centerLat,
+    // centerLon). 10 pixels per metre === 1 px is exactly 0.1 m to MongoDB.
+    width: num('WORLD_WIDTH', 1920, { min: 200 }),
+    height: num('WORLD_HEIGHT', 1080, { min: 200 }),
+    centerLat: num('WORLD_CENTER_LAT', 37.7749, { min: -90, max: 90 }),
+    centerLon: num('WORLD_CENTER_LON', -122.4194, { min: -180, max: 180 }),
+    pixelsPerMeter: num('PIXELS_PER_METER', 10, { min: 0.0001, max: 1e6 }),
+  }),
 });
 
 export default config;
