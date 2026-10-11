@@ -2,6 +2,7 @@
 import mongoose from 'mongoose';
 import config from '../config/index.js';
 import logger from '../utils/logger.js';
+import UserPresence from '../models/UserPresence.js';
 
 mongoose.set('strictQuery', true);
 
@@ -45,11 +46,10 @@ export async function disconnectMongo() {
  * on UserPresence.location that backs $near / $geoWithin. Idempotent, and run
  * on every boot so a fresh (remote) database is usable immediately without a
  * manual migration step.
- *
- * Each model is wired in by the commit that adds it (UserPresence, Room).
  */
 export async function ensureIndexes() {
-  return {};
+  const presence = await UserPresence.createIndexes();
+  return { presence };
 }
 
 export { mongoose, redact as redactUri };
