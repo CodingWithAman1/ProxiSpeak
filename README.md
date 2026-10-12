@@ -212,9 +212,11 @@ server to client; nobody ever receives an event from a room they are not in.
 * **Payload hygiene** — events carry ids, names and pixels only: never a
   connection string, a document `_id`, a session detail or any other database
   artifact. `MONGO_URI` stays redacted in the logs and payloads are never logged.
-* Shutdown stays a single routine: `SIGINT`/`SIGTERM` close the websocket, then
-  the HTTP server, then MongoDB — no duplicate handlers, and a second signal
-  during a slow drain is a no-op.
+* Shutdown stays a single routine: `SIGINT`/`SIGTERM` close the websocket, wait
+  for the presence deletes those disconnects started (`io.drainSessions()`, so a
+  graceful stop never leaves ghost documents behind), then close the HTTP server
+  and finally MongoDB — no duplicate handlers, and a second signal during a slow
+  drain is a no-op.
 
 ### 4. Manual test with two clients
 
