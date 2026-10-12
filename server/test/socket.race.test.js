@@ -162,3 +162,26 @@ test('a duplicate join sent while the first one is still in flight joins once', 
   assert.equal(replies, 2, 'each explicit join request is answered with a snapshot');
   assert.equal([...io.sockets.sockets.values()].length, 2);
 });
+
+test('a socket that disconnects while its join is writing leaves no ghost presence', async () => {
+  const presence = createSlowPresence({ latencyMs: 80 });
+  const { url } = await startServer({ presence });
+
+  const leaver = await connect(client(url));
+  const leaverId = leaver.id;
+  leaver.emit('join', { roomId: 'lobby', name: 'Bailout' });
+  await sleep(15); // the presence write is in flight
+  leaver.close();
+
+  // Wait until that write has actually landed — the moment the race is decided.
+  // Without the abort path the row is now orphaned forever (assertions below).
+  const deadline = Date.now() + 3000;
+  while (presence.calls.upsertsLanded === 0 && Date.now() < deadline) await sleep(20);
+  assert.equal(presence.calls.upsertsLanded, 1, 'the aborted join really did write its row');
+
+  await sleep(150); // and the cleanup has had time to run
+
+  assert.equal(presence.rows.has(leaverId), false, 'the presence row of the aborted join was removed');
+  assert.equal(presence.rows.size, 0, 'no ghost documents remain');
+  assert.equal(presence.calls.removals, 1, 'exactly one cleanup write');
+});

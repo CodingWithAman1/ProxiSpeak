@@ -182,6 +182,18 @@ function registerHandlers(socket, ctx) {
     // the database would be an invisible ghost on the next join.
     await presence.upsertPosition(user, geo);
 
+    // The socket can disappear while that write is in flight. Its disconnect
+    // handler ran before `session` existed, so it had nothing to clean up: undo
+    // the row here, where it is still visible. (No await between this check and
+    // the assignment below, so the disconnect handler cannot slip in either.)
+    if (socket.disconnected) {
+      await presence
+        .removeUser(clientId)
+        .catch((err) => socketLog.error('aborted join cleanup failed:', err?.message ?? err));
+      socketLog.debug('join aborted: the socket disconnected while joining');
+      return;
+    }
+
     session = { roomId, room, user };
     socket.data.roomId = roomId;
     await socket.join(roomId);
