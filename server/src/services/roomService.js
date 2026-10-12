@@ -89,6 +89,30 @@ export async function persistRoom(room) {
   return wire;
 }
 
+/**
+ * Read one room in wire format (cache first, then MongoDB). Returns `null` when
+ * the room does not exist: rooms are never created implicitly, so a `join` for
+ * an unknown room is rejected instead of inventing a blueprint for it.
+ */
+export async function getRoom(roomId) {
+  const key = String(roomId).toLowerCase();
+  const cached = cache.get(key);
+  if (cached) return cached;
+
+  const doc = await Room.findOne({ roomId: key }).lean();
+  if (!doc) return null;
+
+  const wire = toRoomWire(doc);
+  cache.set(key, wire);
+  return wire;
+}
+
+/** Ids of every persisted room — used for the boot log and diagnostics. */
+export async function listRoomIds() {
+  const docs = await Room.find({}, { roomId: 1, _id: 0 }).sort({ roomId: 1 }).lean();
+  return docs.map((doc) => doc.roomId);
+}
+
 export function invalidateRoomCache(roomId) {
   if (roomId) cache.delete(roomId);
   else cache.clear();

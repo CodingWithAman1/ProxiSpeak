@@ -60,6 +60,12 @@ export const config = Object.freeze({
      * down to the listed origins.
      */
     clientOrigins: list('CLIENT_URL', ''),
+    /**
+     * Identifies this process in presence documents. Redis-backed multi-instance
+     * scaling arrives on its own day; until then one process owns the rooms it
+     * serves, and this string is what a document records as its writer.
+     */
+    instanceId: str('INSTANCE_ID', '') || `node-${process.pid}`,
   }),
 
   mongo: Object.freeze({
@@ -67,6 +73,20 @@ export const config = Object.freeze({
     // verbatim — db/mongo.js redacts credentials before any output.
     uri: str('MONGO_URI', 'mongodb://127.0.0.1:27017/proxispeak'),
     serverSelectionTimeoutMS: num('MONGO_TIMEOUT_MS', 8000, { min: 500 }),
+  }),
+
+  socket: Object.freeze({
+    /**
+     * Accepted `move` events per socket per second (token bucket: bursts up to
+     * this many events are allowed, everything above is dropped).
+     */
+    moveEventsPerSec: num('SOCKET_MOVE_EPS', 30, { min: 1, max: 1000 }),
+    /**
+     * Largest distance (pixels) an avatar may travel in one accepted `move`.
+     * The room is 1920 px wide, so the default is a short hop: a single event
+     * can never teleport an avatar across the floor plan.
+     */
+    maxStepPx: num('SOCKET_MAX_STEP_PX', 120, { min: 1, max: 100000 }),
   }),
 
   world: Object.freeze({
