@@ -6,7 +6,7 @@
  * unit tested without a server or a socket.
  */
 import { ValidationError } from '../utils/errors.js';
-import { isPlainObject, requireString } from '../utils/validate.js';
+import { clamp, isPlainObject, requireFiniteNumber, requireString, round2 } from '../utils/validate.js';
 
 /**
  * Room ids are lowercased and restricted to url/file-system safe characters:
@@ -32,6 +32,47 @@ export function validateJoinPayload(payload, { maxNameLength = MAX_NAME_LENGTH }
   const name = requireString(data.name ?? '', 'name', { min: 1, max: maxNameLength, pattern: SAFE_NAME });
 
   return { roomId, name };
+}
+
+/** Absurd magnitudes (1e300) are rejected outright rather than clamped. */
+const MAX_COORDINATE = 1e6;
+
+/**
+ * `move` -> { x, y }. The server owns the position, so two independent guards
+ * are applied to every accepted move:
+ *
+ *  bounds    — a coordinate outside the room is clamped into it, so no client
+ *              can drive an avatar out of the floor plan;
+ *  step      — the accepted position is at most `maxStepPx` away from the
+ *              previous one, which is what makes teleporting impossible.
+ *
+ * @returns {{x:number,y:number,limited:boolean,outOfBounds:boolean}}
+ */
+export function validateMovePayload(payload, { room, previous, maxStepPx }) {
+  const data = isPlainObject(payload) ? payload : {};
+
+  const rawX = requireFiniteNumber(data.x, 'x', { min: -MAX_COORDINATE, max: MAX_COORDINATE });
+  const rawY = requireFiniteNumber(data.y, 'y', { min: -MAX_COORDINATE, max: MAX_COORDINATE });
+
+  let x = round2(clamp(rawX, 0, room.width));
+  let y = round2(clamp(rawY, 0, room.height));
+  const outOfBounds = x !== round2(rawX) || y !== round2(rawY);
+
+  let limited = false;
+  if (previous) {
+    const dx = x - previous.x;
+    const dy = y - previous.y;
+    const distance = Math.hypot(dx, dy);
+    if (distance > maxStepPx) {
+      // Keep the direction the client asked for, shorten the step.
+      const ratio = maxStepPx / distance;
+      x = round2(clamp(previous.x + dx * ratio, 0, room.width));
+      y = round2(clamp(previous.y + dy * ratio, 0, room.height));
+      limited = true;
+    }
+  }
+
+  return { x, y, limited, outOfBounds };
 }
 
 export default validateJoinPayload;

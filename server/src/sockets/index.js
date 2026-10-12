@@ -20,7 +20,8 @@ import logger from '../utils/logger.js';
 import { AppError } from '../utils/errors.js';
 import { describeCorsOrigin, socketCorsOrigin } from '../utils/origin.js';
 import { createGeoTransform } from '../utils/geo.js';
-import { validateJoinPayload } from './validation.js';
+import { TokenBucket } from '../utils/rateLimiter.js';
+import { validateJoinPayload, validateMovePayload } from './validation.js';
 import * as presenceStore from '../services/presenceStore.js';
 import * as roomService from '../services/roomService.js';
 
@@ -97,6 +98,12 @@ function registerHandlers(socket, ctx) {
 
   socketLog.debug('socket connected');
 
+  // One bucket per socket: a client that floods `move` only starves itself.
+  const moveBucket = new TokenBucket({
+    capacity: cfg.socket.moveEventsPerSec,
+    refillPerSec: cfg.socket.moveEventsPerSec,
+  });
+
   // ------------------------------------------------------------------ join ---
   socket.on(
     'join',
@@ -160,6 +167,49 @@ function registerHandlers(socket, ctx) {
       const users = await snapshotUsers(presence, roomId);
       socket.emit('joined', buildJoined(socket.id, room, users));
       socketLog.info(`joined "${roomId}" as "${name}" (${users.length} in room)`);
+    }),
+  );
+
+  // ------------------------------------------------------------------ move ---
+  socket.on(
+    'move',
+    guard('move', async (payload) => {
+      if (!session) {
+        throw new AppError('join a room before sending move events', { code: 'not_joined', status: 409 });
+      }
+
+      // Rate limiting runs before any database work. Throttled events are
+      // dropped silently on purpose: answering a flood with an error per event
+      // would amplify the very traffic the limit exists to stop.
+      if (!moveBucket.take()) {
+        socketLog.debug('move dropped (rate limit)');
+        return;
+      }
+
+      const { x, y, limited, outOfBounds } = validateMovePayload(payload, {
+        room: session.room,
+        previous: session.user,
+        maxStepPx: cfg.socket.maxStepPx,
+      });
+      if (limited || outOfBounds) {
+        socketLog.debug(`move adjusted (bounds=${outOfBounds}, step=${limited})`);
+      }
+
+      session.user.x = x;
+      session.user.y = y;
+      session.user.lastSeen = Date.now();
+
+      // Persist through the Day 2 helper, which also refreshes the 2dsphere
+      // GeoJSON point. A transient write failure is logged and the broadcast
+      // still goes out: the next accepted move rewrites the document.
+      try {
+        await presence.upsertPosition(session.user, geo);
+      } catch (err) {
+        socketLog.error('position persist failed:', err?.message ?? err);
+      }
+
+      // Room-scoped fan-out, everyone but the mover.
+      socket.to(session.roomId).emit('user:moved', { id: socket.id, x, y });
     }),
   );
 

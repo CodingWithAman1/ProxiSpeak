@@ -75,6 +75,20 @@ export const config = Object.freeze({
     serverSelectionTimeoutMS: num('MONGO_TIMEOUT_MS', 8000, { min: 500 }),
   }),
 
+  socket: Object.freeze({
+    /**
+     * Accepted `move` events per socket per second (token bucket: bursts up to
+     * this many events are allowed, everything above is dropped).
+     */
+    moveEventsPerSec: num('SOCKET_MOVE_EPS', 30, { min: 1, max: 1000 }),
+    /**
+     * Largest distance (pixels) an avatar may travel in one accepted `move`.
+     * The room is 1920 px wide, so the default is a short hop: a single event
+     * can never teleport an avatar across the floor plan.
+     */
+    maxStepPx: num('SOCKET_MAX_STEP_PX', 120, { min: 1, max: 100000 }),
+  }),
+
   world: Object.freeze({
     // Tangent-plane projection the 2dsphere schema depends on: the pixel
     // plane is mapped onto a tiny globe patch centred on (centerLat,
