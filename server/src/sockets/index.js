@@ -68,7 +68,11 @@ export function createSocketServer({
 
 function registerHandlers(socket, ctx) {
   const { cfg, log, presence, rooms, geo } = ctx;
-  const socketLog = log.child(socket.id.slice(0, 6));
+  // Captured once: the id is this connection's identity everywhere (presence
+  // documents, broadcasts, room membership) and Socket.io clears it the moment
+  // the connection drops, which is far too late for cleanup.
+  const clientId = socket.id;
+  const socketLog = log.child(clientId.slice(0, 6));
 
   /** This socket's presence: null until it has joined a room successfully. */
   let session = null;
@@ -115,7 +119,7 @@ function registerHandlers(socket, ctx) {
       // `user:joined` for the people already inside.
       if (session && session.roomId === roomId) {
         const users = await snapshotUsers(presence, roomId);
-        socket.emit('joined', buildJoined(socket.id, session.room, users));
+        socket.emit('joined', buildJoined(clientId, session.room, users));
         socketLog.debug(`duplicate join ignored (already in "${roomId}")`);
         return;
       }
@@ -142,7 +146,7 @@ function registerHandlers(socket, ctx) {
       const spawn = chooseSpawn(room, occupants, cfg.world);
 
       const user = {
-        id: socket.id,
+        id: clientId,
         roomId,
         name,
         color: DEFAULT_AVATAR_COLOR,
@@ -165,7 +169,7 @@ function registerHandlers(socket, ctx) {
       socket.to(roomId).emit('user:joined', { id: user.id, name: user.name, x: user.x, y: user.y });
 
       const users = await snapshotUsers(presence, roomId);
-      socket.emit('joined', buildJoined(socket.id, room, users));
+      socket.emit('joined', buildJoined(clientId, room, users));
       socketLog.info(`joined "${roomId}" as "${name}" (${users.length} in room)`);
     }),
   );
@@ -209,11 +213,53 @@ function registerHandlers(socket, ctx) {
       }
 
       // Room-scoped fan-out, everyone but the mover.
-      socket.to(session.roomId).emit('user:moved', { id: socket.id, x, y });
+      socket.to(session.roomId).emit('user:moved', { id: clientId, x, y });
     }),
   );
 
-  socket.on('disconnect', (reason) => socketLog.debug(`socket disconnected (${reason})`));
+  // ------------------------------------------------------------ disconnect ---
+  /**
+   * Release everything this socket owns: the peers' view of it, its room
+   * membership and its presence document.
+   *
+   * Safe to call at any time — a socket that never joined, or whose presence
+   * was already removed, is a no-op — and scoped to `clientId`, so a socket
+   * that reconnects (new id, brand new document) is never cleaned up by the
+   * teardown of the connection it replaced.
+   */
+  async function releaseSession(reason) {
+    if (!session) return;
+    const { roomId } = session;
+    session = null;
+    socket.data.roomId = null;
+
+    // Peers first, while the room channel is unambiguous, then the channel and
+    // finally this socket's own document.
+    socket.to(roomId).emit('user:left', { id: clientId });
+
+    try {
+      await Promise.resolve(socket.leave(roomId));
+    } catch {
+      /* the adapter already dropped the membership */
+    }
+
+    try {
+      await presence.removeUser(clientId);
+    } catch (err) {
+      socketLog.error('presence cleanup failed:', err?.message ?? err);
+    }
+
+    socketLog.debug(`left "${roomId}" (${reason})`);
+  }
+
+  socket.on('disconnect', (reason) => {
+    socketLog.debug(`socket disconnected (${reason})`);
+    // The socket is already gone at this point, so the broadcast targets the
+    // room's remaining members and the delete is a no-op when nothing is left.
+    releaseSession(`disconnect: ${reason}`).catch((err) =>
+      socketLog.error('disconnect cleanup failed:', err?.message ?? err),
+    );
+  });
   socket.on('error', (err) => socketLog.error('socket error:', err?.message ?? err));
 }
 
