@@ -60,14 +60,39 @@ export function createSocketServer({
   // GeoJSON, and both must always agree.
   const geo = createGeoTransform(cfg.world);
 
-  io.on('connection', (socket) => registerHandlers(socket, { io, cfg, log, presence, rooms, geo }));
+  /**
+   * Presence cleanups that have started but not finished. Sockets disconnect
+   * while `io.close()` runs and the cleanup is an asynchronous database write,
+   * so a shutdown has to be able to wait for them — see `io.drainSessions`.
+   */
+  const pendingCleanups = new Set();
+  const track = (promise) => {
+    pendingCleanups.add(promise);
+    const done = () => pendingCleanups.delete(promise);
+    promise.then(done, done);
+    return promise;
+  };
+
+  /**
+   * Wait for every presence cleanup the gateway has started. Call it after
+   * `io.close()` and before the database connection is closed: otherwise the
+   * documents of the clients that were connected are cut off mid-delete and
+   * stay behind as ghosts.
+   */
+  io.drainSessions = async () => {
+    // Looping (not a single pass) also covers a cleanup that starts while an
+    // earlier one is being awaited.
+    while (pendingCleanups.size) await Promise.allSettled([...pendingCleanups]);
+  };
+
+  io.on('connection', (socket) => registerHandlers(socket, { io, cfg, log, presence, rooms, geo, track }));
 
   log.info(`Socket.io attached to the HTTP server (CORS: ${describeCorsOrigin(cfg)})`);
   return io;
 }
 
 function registerHandlers(socket, ctx) {
-  const { cfg, log, presence, rooms, geo } = ctx;
+  const { cfg, log, presence, rooms, geo, track } = ctx;
   // Captured once: the id is this connection's identity everywhere (presence
   // documents, broadcasts, room membership) and Socket.io clears it the moment
   // the connection drops, which is far too late for cleanup.
@@ -187,9 +212,11 @@ function registerHandlers(socket, ctx) {
     // the row here, where it is still visible. (No await between this check and
     // the assignment below, so the disconnect handler cannot slip in either.)
     if (socket.disconnected) {
-      await presence
-        .removeUser(clientId)
-        .catch((err) => socketLog.error('aborted join cleanup failed:', err?.message ?? err));
+      await track(
+        presence
+          .removeUser(clientId)
+          .catch((err) => socketLog.error('aborted join cleanup failed:', err?.message ?? err)),
+      );
       socketLog.debug('join aborted: the socket disconnected while joining');
       return;
     }
@@ -287,8 +314,11 @@ function registerHandlers(socket, ctx) {
     socketLog.debug(`socket disconnected (${reason})`);
     // The socket is already gone at this point, so the broadcast targets the
     // room's remaining members and the delete is a no-op when nothing is left.
-    releaseSession(`disconnect: ${reason}`).catch((err) =>
-      socketLog.error('disconnect cleanup failed:', err?.message ?? err),
+    // Tracked, so a shutdown waits for this delete instead of cutting it off.
+    track(
+      releaseSession(`disconnect: ${reason}`).catch((err) =>
+        socketLog.error('disconnect cleanup failed:', err?.message ?? err),
+      ),
     );
   });
   socket.on('error', (err) => socketLog.error('socket error:', err?.message ?? err));

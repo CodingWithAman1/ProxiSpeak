@@ -53,8 +53,12 @@ async function main() {
     // Force-exit if keep-alive connections do not drain in time.
     setTimeout(() => process.exit(1), 10000).unref();
     // Close the realtime channel first so clients get a clean disconnect
-    // instead of a dropped TCP connection.
+    // instead of a dropped TCP connection. Sockets disconnect as that happens
+    // and their presence cleanup is an asynchronous write, so wait for it
+    // before MongoDB goes away — otherwise every connected client would be
+    // left behind as a ghost document.
     await new Promise((resolve) => io.close(resolve));
+    await io.drainSessions();
     await new Promise((resolve) => httpServer.close(resolve));
     await disconnectMongo().catch(() => {});
     log.info('bye');

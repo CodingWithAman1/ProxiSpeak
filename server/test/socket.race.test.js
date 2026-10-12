@@ -83,9 +83,10 @@ async function startServer({ presence, cfg = config } = {}) {
   const handle = {
     url,
     io,
-    /** Close the gateway. */
+    /** Close the gateway (as a shutdown does) and let its cleanups finish. */
     shutdown: async () => {
       await new Promise((resolve) => io.close(resolve));
+      await io.drainSessions();
       await new Promise((resolve) => server.close(resolve));
     },
     close: async () => {
@@ -184,4 +185,55 @@ test('a socket that disconnects while its join is writing leaves no ghost presen
   assert.equal(presence.rows.has(leaverId), false, 'the presence row of the aborted join was removed');
   assert.equal(presence.rows.size, 0, 'no ghost documents remain');
   assert.equal(presence.calls.removals, 1, 'exactly one cleanup write');
+});
+
+test('shutdown waits for in-flight presence cleanup before the database closes', async () => {
+  const presence = createSlowPresence({ latencyMs: 80 });
+  const { url, shutdown } = await startServer({ presence });
+
+  const socket = await connect(client(url));
+  const socketId = socket.id; // cleared by the client as the connection drops
+  const joined = waitFor(socket, 'joined');
+  socket.emit('join', { roomId: 'lobby', name: 'Graceful' });
+  await joined;
+  assert.equal(presence.rows.size, 1);
+
+  // Mirror the real boot sequence: io.close() -> drainSessions() -> the driver
+  // refuses further writes. Without the drain, the delete is cut off and the
+  // document survives as a ghost.
+  let databaseOpen = true;
+  const trackedRemovals = [];
+  const originalRemove = presence.removeUser.bind(presence);
+  presence.removeUser = async (sessionId) => {
+    if (!databaseOpen) throw new Error('MongoNotConnectedError: Client must be connected');
+    const result = await originalRemove(sessionId);
+    trackedRemovals.push(sessionId);
+    return result;
+  };
+
+  await shutdown();
+  databaseOpen = false; // what disconnectMongo() does, one line later
+
+  assert.deepEqual(trackedRemovals, [socketId], 'the presence delete completed while the database was still open');
+  assert.equal(presence.rows.size, 0, 'no ghost document was left behind by the shutdown');
+});
+
+test('a shutdown with several connected clients removes every presence document', async () => {
+  const presence = createSlowPresence({ latencyMs: 40 });
+  const { url, shutdown } = await startServer({ presence });
+
+  const sockets = await Promise.all(Array.from({ length: 12 }, () => connect(client(url))));
+  await Promise.all(
+    sockets.map((socket, i) =>
+      new Promise((resolve) => {
+        socket.once('joined', resolve);
+        socket.emit('join', { roomId: 'lobby', name: `User ${i}` });
+      }),
+    ),
+  );
+  assert.equal(presence.rows.size, 12, 'every client has a presence document');
+
+  await shutdown();
+
+  assert.equal(presence.rows.size, 0, 'the shutdown drained all twelve cleanups');
 });
