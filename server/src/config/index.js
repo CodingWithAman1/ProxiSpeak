@@ -60,6 +60,12 @@ export const config = Object.freeze({
      * down to the listed origins.
      */
     clientOrigins: list('CLIENT_URL', ''),
+    /**
+     * Identifies this process in presence documents. Redis-backed multi-instance
+     * scaling arrives on its own day; until then one process owns the rooms it
+     * serves, and this string is what a document records as its writer.
+     */
+    instanceId: str('INSTANCE_ID', '') || `node-${process.pid}`,
   }),
 
   mongo: Object.freeze({

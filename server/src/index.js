@@ -10,6 +10,7 @@ import logger from './utils/logger.js';
 import { connectMongo, disconnectMongo, ensureIndexes } from './db/mongo.js';
 import { createApp } from './app.js';
 import { createSocketServer } from './sockets/index.js';
+import { listRoomIds } from './services/roomService.js';
 
 const log = logger;
 
@@ -26,6 +27,12 @@ async function main() {
   const httpServer = http.createServer();
   const app = createApp({ config, logger: log });
   httpServer.on('request', app);
+
+  // Rooms are data, not code: a join for a room that was never created is
+  // rejected, so say plainly which rooms exist (and what to do when none do).
+  const roomIds = await listRoomIds();
+  if (roomIds.length) log.info(`Rooms available: ${roomIds.join(', ')}`);
+  else log.warn('No rooms in the database yet — run `npm run seed` before clients can join');
 
   // The websocket shares the HTTP server, so there is exactly one port to open,
   // proxy and firewall.
