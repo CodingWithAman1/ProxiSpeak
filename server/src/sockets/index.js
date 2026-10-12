@@ -76,6 +76,8 @@ function registerHandlers(socket, ctx) {
 
   /** This socket's presence: null until it has joined a room successfully. */
   let session = null;
+  /** The join this socket is currently processing, if any (see the handler). */
+  let joinInFlight = null;
 
   const fail = (code, message, field) =>
     socket.emit('error', field ? { code, message, field } : { code, message });
@@ -114,6 +116,13 @@ function registerHandlers(socket, ctx) {
     guard('join', async (payload) => {
       const { roomId, name } = validateJoinPayload(payload);
 
+      // Joins are serialised per socket. `session` is only set once the presence
+      // write has been awaited, so a second `join` that arrives before the first
+      // one finished (a double-click, or a client that re-sends while the first
+      // reply is still in flight) would otherwise run the whole join path again —
+      // two presence writes and two `user:joined` broadcasts for one avatar.
+      while (joinInFlight) await joinInFlight.catch(() => {});
+
       // A repeated join for the room this socket is already in is a no-op apart
       // from a fresh snapshot: no second presence document, no second
       // `user:joined` for the people already inside.
@@ -134,45 +143,55 @@ function registerHandlers(socket, ctx) {
         });
       }
 
-      const room = await rooms.getRoom(roomId);
-      if (!room) {
-        throw new AppError(
-          `room "${roomId}" does not exist — run \`npm run seed\` to create the default rooms`,
-          { code: 'room_not_found', status: 404 },
-        );
+      joinInFlight = performJoin({ roomId, name });
+      try {
+        await joinInFlight;
+      } finally {
+        joinInFlight = null;
       }
-
-      const occupants = await snapshotUsers(presence, roomId);
-      const spawn = chooseSpawn(room, occupants, cfg.world);
-
-      const user = {
-        id: clientId,
-        roomId,
-        name,
-        color: DEFAULT_AVATAR_COLOR,
-        avatar: 'circle',
-        x: spawn.x,
-        y: spawn.y,
-        angle: 0,
-        instanceId: cfg.server.instanceId,
-        lastSeen: Date.now(),
-      };
-
-      // Presence first: a user that is broadcast to the room but missing from
-      // the database would be an invisible ghost on the next join.
-      await presence.upsertPosition(user, geo);
-
-      session = { roomId, room, user };
-      socket.data.roomId = roomId;
-      await socket.join(roomId);
-
-      socket.to(roomId).emit('user:joined', { id: user.id, name: user.name, x: user.x, y: user.y });
-
-      const users = await snapshotUsers(presence, roomId);
-      socket.emit('joined', buildJoined(clientId, room, users));
-      socketLog.info(`joined "${roomId}" as "${name}" (${users.length} in room)`);
     }),
   );
+
+  /** The accepted join path: room lookup, spawn, presence, room channel, replies. */
+  async function performJoin({ roomId, name }) {
+    const room = await rooms.getRoom(roomId);
+    if (!room) {
+      throw new AppError(
+        `room "${roomId}" does not exist — run \`npm run seed\` to create the default rooms`,
+        { code: 'room_not_found', status: 404 },
+      );
+    }
+
+    const occupants = await snapshotUsers(presence, roomId);
+    const spawn = chooseSpawn(room, occupants, cfg.world);
+
+    const user = {
+      id: clientId,
+      roomId,
+      name,
+      color: DEFAULT_AVATAR_COLOR,
+      avatar: 'circle',
+      x: spawn.x,
+      y: spawn.y,
+      angle: 0,
+      instanceId: cfg.server.instanceId,
+      lastSeen: Date.now(),
+    };
+
+    // Presence first: a user that is broadcast to the room but missing from
+    // the database would be an invisible ghost on the next join.
+    await presence.upsertPosition(user, geo);
+
+    session = { roomId, room, user };
+    socket.data.roomId = roomId;
+    await socket.join(roomId);
+
+    socket.to(roomId).emit('user:joined', { id: user.id, name: user.name, x: user.x, y: user.y });
+
+    const users = await snapshotUsers(presence, roomId);
+    socket.emit('joined', buildJoined(clientId, room, users));
+    socketLog.info(`joined "${roomId}" as "${name}" (${users.length} in room)`);
+  }
 
   // ------------------------------------------------------------------ move ---
   socket.on(
