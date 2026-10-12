@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "ProxiSpeak — geospatial proximity audio ecosystem (Express server, Day 1 skeleton)",
+  "description": "ProxiSpeak — geospatial proximity audio ecosystem (Express + Socket.io server)",
   "engines": {
     "node": ">=18.17"
   },
@@ -17,6 +17,7 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
-    "mongoose": "^8.9.5"
+    "mongoose": "^8.9.5",
+    "socket.io": "^4.8.4"
   }
 }
