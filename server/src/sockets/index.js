@@ -353,10 +353,10 @@ function toRoomPayload(room) {
   };
 }
 
-/** Presence rows -> the minimal `{ id, x, y }` list the client needs. */
+/** Presence rows -> the minimal `{ id, name, x, y }` list the client needs. */
 async function snapshotUsers(presence, roomId) {
   const rows = await presence.listPresenceByRoom(roomId);
-  return rows.map((row) => ({ id: row.sessionId, x: row.x, y: row.y }));
+  return rows.map((row) => ({ id: row.sessionId, name: row.name, x: row.x, y: row.y }));
 }
 
 /**

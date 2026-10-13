@@ -240,6 +240,31 @@ test('two clients can join the same room and both receive the room snapshot', as
   });
 });
 
+test('joined snapshot carries the names of users already in the room', async (t) => {
+  if (!requireMongo(t)) return;
+  await withServer(async ({ client }) => {
+    const roomId = await createRoom('joined-names');
+    const a = await connect(client());
+    const b = await connect(client());
+
+    await joinRoom(a, { roomId, name: 'Ada' });
+    const joinedB = await joinRoom(b, { roomId, name: 'Bob' });
+
+    const ada = joinedB.users.find((u) => u.id === a.id);
+    assert.ok(ada, 'B snapshot includes A');
+    assert.equal(ada.name, 'Ada', 'B learns the name of the user already in the room');
+    assert.ok(Number.isFinite(ada.x) && Number.isFinite(ada.y));
+    assert.deepEqual(
+      Object.keys(ada).sort(),
+      ['id', 'name', 'x', 'y'],
+      'joined.users entries carry exactly id, name and position',
+    );
+
+    const bob = joinedB.users.find((u) => u.id === b.id);
+    assert.equal(bob?.name, 'Bob', 'the newcomer is named in its own snapshot too');
+  });
+});
+
 test('a move is broadcast to the room with the mover id and its coordinates', async (t) => {
   if (!requireMongo(t)) return;
   await withServer(async ({ client }) => {
