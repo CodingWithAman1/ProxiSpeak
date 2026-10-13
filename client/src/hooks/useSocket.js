@@ -97,10 +97,15 @@ export function useSocket() {
         const world = worldRef.current;
         world.room = payload.room ?? null;
         world.selfId = payload.selfId ?? socket.id ?? null;
+        // Snapshot known names BEFORE clearing: `joined.users` carries
+        // { id, x, y } only, so clearing first would discard every name
+        // a `user:joined` already taught us (reading `existing` after
+        // clear() was always undefined).
+        const previousById = new Map(world.users);
         world.users.clear();
         for (const user of payload.users ?? []) {
           if (!user || typeof user.id !== 'string') continue;
-          const existing = world.users.get(user.id);
+          const existing = previousById.get(user.id);
           world.users.set(user.id, {
             id: user.id,
             // `joined.users` carries { id, x, y } only (Day 3); keep any
