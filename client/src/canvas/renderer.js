@@ -100,3 +100,78 @@ export function drawRoom(ctx, world, size) {
 }
 
 export default drawRoom;
+
+/** Stable per-user colour so the same avatar looks the same in every tab. */
+const AVATAR_PALETTE = ['#4f8cff', '#f472b6', '#34d399', '#fbbf24', '#a78bfa', '#22d3ee', '#fb7185', '#a3e635'];
+
+export function avatarColor(user) {
+  const key = String(user?.id ?? user?.name ?? '');
+  let hash = 0;
+  for (let i = 0; i < key.length; i += 1) hash = (hash * 31 + key.charCodeAt(i)) >>> 0;
+  return AVATAR_PALETTE[hash % AVATAR_PALETTE.length];
+}
+
+/** Display label: server name when known, else a short stable id tag. */
+export function avatarLabel(user, selfId, selfName) {
+  if (user?.name) return user.name;
+  if (user?.id && user.id === selfId && selfName) return selfName;
+  return user?.id ? `user-${String(user.id).slice(0, 4)}` : 'guest';
+}
+
+/**
+ * Draw every avatar in the world ref as a labelled circle. The local
+ * user (world.selfId) is highlighted with a bright fill, a white ring
+ * and a "you" tag, so you can find yourself among the crowd.
+ */
+export function drawAvatars(ctx, world, viewport) {
+  if (!world || !viewport) return;
+  const radius = Math.max(7, 18 * viewport.scale);
+
+  for (const user of world.users.values()) {
+    if (!Number.isFinite(user?.x) || !Number.isFinite(user?.y)) continue;
+    const centre = worldToScreen(user, viewport);
+    const isSelf = user.id === world.selfId;
+    const label = avatarLabel(user, world.selfId, null);
+
+    ctx.beginPath();
+    ctx.arc(centre.x, centre.y, radius, 0, Math.PI * 2);
+    ctx.fillStyle = isSelf ? '#ffd166' : avatarColor(user);
+    ctx.fill();
+
+    ctx.lineWidth = isSelf ? 3 : 1.5;
+    ctx.strokeStyle = isSelf ? '#ffffff' : 'rgba(5, 7, 13, 0.65)';
+    ctx.stroke();
+
+    if (isSelf) {
+      ctx.beginPath();
+      ctx.arc(centre.x, centre.y, radius + 5, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(255, 209, 102, 0.55)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+
+    // Initial inside the circle.
+    ctx.fillStyle = isSelf ? '#1a1405' : '#0b1020';
+    ctx.font = `700 ${Math.max(10, radius)}px system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label.slice(0, 1).toUpperCase(), centre.x, centre.y + 0.5);
+
+    // Name label above the avatar (with a " (you)" marker for self).
+    ctx.font = '12px system-ui, sans-serif';
+    ctx.textBaseline = 'bottom';
+    const text = isSelf ? `${label} (you)` : label;
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = 'rgba(5, 7, 13, 0.8)';
+    ctx.strokeText(text, centre.x, centre.y - radius - 6);
+    ctx.fillStyle = '#e5e9f0';
+    ctx.fillText(text, centre.x, centre.y - radius - 6);
+  }
+}
+
+/** One full frame: room first, then the people in it. */
+export function drawWorld(ctx, world, size) {
+  const viewport = drawRoom(ctx, world, size);
+  if (viewport) drawAvatars(ctx, world, viewport);
+  return viewport;
+}
