@@ -6,3 +6,51 @@ body {
   color: #e5e9f0;
 }
 .app-shell { padding: 2rem; }
+
+.join-screen {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+}
+.join-card {
+  width: min(420px, 100%);
+  background: #121a2e;
+  border: 1px solid #26314d;
+  border-radius: 16px;
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.join-card h1 { margin: 0; font-size: 1.8rem; }
+.join-subtitle, .join-hint { margin: 0; color: #9aa7c2; }
+.field { display: flex; flex-direction: column; gap: 0.4rem; }
+.field span { font-size: 0.9rem; color: #c3cbdd; }
+.field input, .field select {
+  padding: 0.65rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid #33415e;
+  background: #0b1020;
+  color: inherit;
+  font: inherit;
+}
+.join-card button {
+  padding: 0.7rem 1rem;
+  border: 0;
+  border-radius: 8px;
+  background: #4f8cff;
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.join-card button:disabled { opacity: 0.6; cursor: wait; }
+.form-error {
+  margin: 0;
+  padding: 0.7rem 0.8rem;
+  border-radius: 8px;
+  background: #3a1620;
+  border: 1px solid #7f2438;
+  color: #ffb4c0;
+}
