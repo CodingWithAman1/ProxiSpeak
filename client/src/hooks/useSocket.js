@@ -15,7 +15,7 @@ import { SERVER_URL } from '../config.js';
  *
  * Events (Day 3 contract):
  *   emit  join        { roomId, name }
- *   on    joined      { selfId, room, users: [{ id, x, y }] }
+ *   on    joined      { selfId, room, users: [{ id, name, x, y }] }
  *   on    user:joined { id, name, x, y }
  *   on    user:moved  { id, x, y }
  *   on    user:left   { id }
@@ -97,10 +97,9 @@ export function useSocket() {
         const world = worldRef.current;
         world.room = payload.room ?? null;
         world.selfId = payload.selfId ?? socket.id ?? null;
-        // Snapshot known names BEFORE clearing: `joined.users` carries
-        // { id, x, y } only, so clearing first would discard every name
-        // a `user:joined` already taught us (reading `existing` after
-        // clear() was always undefined).
+        // Snapshot known users BEFORE clearing, as a fallback for any
+        // entry whose name is missing; the server now sends `name` in
+        // every `joined.users` entry, and that name wins.
         const previousById = new Map(world.users);
         world.users.clear();
         for (const user of payload.users ?? []) {
@@ -108,13 +107,10 @@ export function useSocket() {
           const existing = previousById.get(user.id);
           world.users.set(user.id, {
             id: user.id,
-            // `joined.users` carries { id, x, y } only (Day 3); keep any
-            // name a later `user:joined` already taught us, and label
-            // ourselves with the name we just joined under.
             name:
-              user.id === world.selfId
-                ? (pendingJoinRef.current?.name ?? user.name ?? null)
-                : (user.name ?? existing?.name ?? null),
+              user.name ??
+              existing?.name ??
+              (user.id === world.selfId ? (pendingJoinRef.current?.name ?? null) : null),
             x: user.x,
             y: user.y,
           });

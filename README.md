@@ -170,7 +170,7 @@ server to client; nobody ever receives an event from a room they are not in.
 | Event | Direction | Payload | Notes |
 | --- | --- | --- | --- |
 | `join` | C→S | `{ roomId: string, name: string }` | `roomId` 1–48 chars (`a-z`, `0-9`, `-`, `_`; lowercased), `name` 1–24 chars, trimmed, control characters refused. |
-| `joined` | S→C | `{ selfId, room: { roomId, name, width, height, obstacles[] }, users: [{ id, x, y }] }` | Reply to the joining socket only. `users` is the room as it currently stands, **including** the newcomer (identified by `selfId`). `obstacles` are data only (`id`, `type`, `x`, `y`, `w`, `h`, `blocksAudio`, `attenuation`) — Day 3 ships no collision or occlusion logic. |
+| `joined` | S→C | `{ selfId, room: { roomId, name, width, height, obstacles[] }, users: [{ id, name, x, y }] }` | Reply to the joining socket only. `users` is the room as it currently stands, **including** the newcomer (identified by `selfId`). `obstacles` are data only (`id`, `type`, `x`, `y`, `w`, `h`, `blocksAudio`, `attenuation`) — Day 3 ships no collision or occlusion logic. |
 | `user:joined` | S→C | `{ id, name, x, y }` | The other sockets in the same room, once per successful join. |
 | `move` | C→S | `{ x: number, y: number }` | Finite numbers only; the position is clamped into the room and the step is capped. |
 | `user:moved` | S→C | `{ id, x, y }` | The same room only, excluding the mover. |
