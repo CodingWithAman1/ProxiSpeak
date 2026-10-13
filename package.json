@@ -2,7 +2,7 @@
   "name": "proxispeak",
   "version": "1.0.0",
   "private": true,
-  "description": "ProxiSpeak — geospatial proximity audio ecosystem",
+  "description": "ProxiSpeak \u2014 geospatial proximity audio ecosystem",
   "engines": {
     "node": ">=18.17"
   },
@@ -10,6 +10,9 @@
     "start": "node server/src/index.js",
     "dev:server": "npm --prefix server run dev",
     "test": "npm --prefix server test",
-    "seed": "npm --prefix server run seed"
+    "seed": "npm --prefix server run seed",
+    "dev:client": "npm --prefix client run dev",
+    "build:client": "npm --prefix client run build",
+    "install:client": "npm --prefix client install"
   }
 }

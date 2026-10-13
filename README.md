@@ -331,6 +331,94 @@ curl -i http://localhost:4000/health
   `user:joined`, `move` / `user:moved` with bounds + step + rate-limit guards,
   disconnect cleanup with `user:left`, room-scoped broadcasts only, a documented
   `error` event, and integration + validation tests.
+* **Day 4 status: React client + canvas world done** — Vite + React client in
+  `client/` (join screen, Socket.io world-state hook, DPR-aware canvas with
+  floor/grid/obstacle/avatar rendering, coordinate-helper unit tests). No
+  movement input yet (Day 5).
 * Redis, WebRTC, the proximity queries (`$near` / `$geoWithin` / `$geoNear`),
-  audio, collision/occlusion and the React client are intentionally **not** part
-  of Days 1–3; they land with their own days/weeks above.
+  audio and collision/occlusion are intentionally **not** part of Days 1–4;
+  they land with their own days/weeks above.
+
+## Day 4: Client and world rendering
+
+Day 4 adds the first browser client: a Vite + React scaffold in `client/`,
+a Socket.io hook that keeps the whole world in a ref (so realtime avatar
+updates never re-render React), a validated join screen, and an HTML5
+Canvas world that paints the room the server describes — floor, light
+grid, obstacles and every avatar in it. There is deliberately **no
+movement input yet**: you see the position the server gave you in
+`joined`; keyboard/mouse movement and throttled `move` broadcasting are
+Day 5.
+
+The client talks only to the Day 3 contract (`join` / `joined` /
+`user:joined` / `user:moved` / `user:left` / `error`). No server code
+changed on Day 4. The only dependencies are `react`, `react-dom` and
+`socket.io-client`, with Vite + `@vitejs/plugin-react` as build tooling.
+
+### Run server + client in dev
+
+You need a local (or remote) MongoDB, as on Day 2 — the server stores
+rooms and presence there.
+
+```bash
+# terminal 1 — server (repo root)
+cp .env.example .env            # CLIENT_URL already allows http://localhost:5173
+npm install --prefix server
+npm run seed                    # creates lobby / studio / lounge
+npm start                       # HTTP + websocket on :4000
+
+# terminal 2 — client (repo root)
+npm run install:client          # same as: npm install --prefix client
+npm run dev:client              # Vite on http://localhost:5173
+```
+
+The server URL is resolved in exactly one place, `client/src/config.js`:
+`VITE_SERVER_URL` (see `client/.env.example`) wins, otherwise
+`http://localhost:4000` in dev and same-origin in a production build.
+No other module hardcodes a server URL. In dev the Vite server also
+proxies `/socket.io` (websocket) and `/api` to `http://localhost:4000`
+(see `client/vite.config.js`).
+
+Production build (serving it from Express is a later day):
+
+```bash
+npm run build:client            # same as: npm run build --prefix client
+```
+
+### What you should see
+
+1. Open `http://localhost:5173`: a join screen with a name input and a
+   room selector defaulting to **lobby**. Empty/over-long names are
+   refused on the spot; server rejections are shown in place —
+   `room_not_found` (run `npm run seed`), invalid payloads, and
+   connection failures (server down or origin not in `CLIENT_URL`).
+2. Join **lobby** in two browser tabs with different names. Each tab
+   shows the same room: a letterboxed 1920x1080 floor with a light
+   grid and the server's obstacles, coloured per type — grey `wall`,
+   amber `desk`, blue `screen`, purple `pillar`, green `plant`.
+3. Both tabs show **both avatars** as labelled circles. Your own avatar
+   is highlighted (bright fill, ring, "(you)"). Avatars appear on
+   `user:joined`, follow `user:moved` and vanish on `user:left` —
+   closing one tab removes its avatar from the other. Nobody moves yet:
+   avatars sit at the spawn position the server assigned.
+4. Resizing the window re-fits the room (letterboxed, never stretched,
+   sharp on retina displays via devicePixelRatio-aware sizing).
+
+World state (room size, obstacles, users by id, `selfId`) lives in a
+mutable ref owned by `client/src/hooks/useSocket.js`; the canvas
+(`client/src/components/WorldCanvas.jsx`) reads it inside a single
+`requestAnimationFrame` loop started on mount and cancelled on
+unmount, when it also removes its resize listener. The socket
+disconnects when the hook unmounts, so a closed tab leaves no presence
+behind server-side either.
+
+### Tests
+
+The world-to-screen maths lives in pure helpers
+(`client/src/canvas/coords.js` — `computeViewport`, `worldToScreen`,
+`screenToWorld`), unit-tested with Node's built-in test runner, no new
+framework:
+
+```bash
+npm test --prefix client        # node --test: letterboxing, inverse mapping, validation
+```
