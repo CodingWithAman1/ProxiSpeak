@@ -1,0 +1,8 @@
+* { box-sizing: border-box; }
+html, body, #root { margin: 0; height: 100%; }
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: #0b1020;
+  color: #e5e9f0;
+}
+.app-shell { padding: 2rem; }
