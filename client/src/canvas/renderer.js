@@ -6,7 +6,7 @@
  * devicePixelRatio transform and the requestAnimationFrame loop; this
  * module only knows how to draw in CSS-pixel coordinates.
  */
-import { computeViewport, worldToScreen } from './coords.js';
+import { computeViewport } from './coords.js';
 
 /** Distinct colour per obstacle type, straight from the server's data. */
 export const OBSTACLE_COLORS = Object.freeze({
@@ -44,58 +44,59 @@ export function drawRoom(ctx, world, size) {
   if (!room) return null;
 
   const viewport = computeViewport(room.width, room.height, width, height);
-  const floorTopLeft = worldToScreen({ x: 0, y: 0 }, viewport);
-  const floorBottomRight = worldToScreen({ x: room.width, y: room.height }, viewport);
+  // Screen-space floor origin; computed arithmetically (not via
+  // worldToScreen) so a frame allocates no per-line/per-obstacle objects.
+  const { offsetX, offsetY, scale } = viewport;
 
   // Floor.
   ctx.fillStyle = '#151c2e';
-  ctx.fillRect(floorTopLeft.x, floorTopLeft.y, viewport.drawnWidth, viewport.drawnHeight);
+  ctx.fillRect(offsetX, offsetY, viewport.drawnWidth, viewport.drawnHeight);
 
   // Light grid inside the floor only.
   ctx.strokeStyle = 'rgba(163, 179, 214, 0.14)';
   ctx.lineWidth = 1;
   ctx.beginPath();
   for (let x = GRID_STEP_WORLD; x < room.width; x += GRID_STEP_WORLD) {
-    const from = worldToScreen({ x, y: 0 }, viewport);
-    const to = worldToScreen({ x, y: room.height }, viewport);
-    ctx.moveTo(from.x, from.y);
-    ctx.lineTo(to.x, to.y);
+    const screenX = offsetX + x * scale;
+    ctx.moveTo(screenX, offsetY);
+    ctx.lineTo(screenX, offsetY + viewport.drawnHeight);
   }
   for (let y = GRID_STEP_WORLD; y < room.height; y += GRID_STEP_WORLD) {
-    const from = worldToScreen({ x: 0, y }, viewport);
-    const to = worldToScreen({ x: room.width, y }, viewport);
-    ctx.moveTo(from.x, from.y);
-    ctx.lineTo(to.x, to.y);
+    const screenY = offsetY + y * scale;
+    ctx.moveTo(offsetX, screenY);
+    ctx.lineTo(offsetX + viewport.drawnWidth, screenY);
   }
   ctx.stroke();
 
   // Floor border so the room edge reads against the letterbox bands.
   ctx.strokeStyle = 'rgba(229, 233, 240, 0.35)';
   ctx.lineWidth = 2;
-  ctx.strokeRect(floorTopLeft.x, floorTopLeft.y, viewport.drawnWidth, viewport.drawnHeight);
+  ctx.strokeRect(offsetX, offsetY, viewport.drawnWidth, viewport.drawnHeight);
 
   // Obstacles: server data only ({ id, type, x, y, w, h, ... }), painted
   // in room coordinates so the layout matches every other client.
   for (const obstacle of room.obstacles ?? []) {
-    const topLeft = worldToScreen(obstacle, viewport);
+    const left = offsetX + obstacle.x * scale;
+    const top = offsetY + obstacle.y * scale;
+    const w = obstacle.w * scale;
+    const h = obstacle.h * scale;
     ctx.fillStyle = obstacleColor(obstacle.type);
     ctx.globalAlpha = 0.85;
-    ctx.fillRect(topLeft.x, topLeft.y, obstacle.w * viewport.scale, obstacle.h * viewport.scale);
+    ctx.fillRect(left, top, w, h);
     ctx.globalAlpha = 1;
     ctx.strokeStyle = 'rgba(5, 7, 13, 0.55)';
     ctx.lineWidth = 1;
-    ctx.strokeRect(topLeft.x, topLeft.y, obstacle.w * viewport.scale, obstacle.h * viewport.scale);
+    ctx.strokeRect(left, top, w, h);
 
-    if (viewport.scale > 0.25) {
+    if (scale > 0.25) {
       ctx.fillStyle = 'rgba(229, 233, 240, 0.75)';
       ctx.font = '10px system-ui, sans-serif';
       ctx.textAlign = 'left';
       ctx.textBaseline = 'bottom';
-      ctx.fillText(String(obstacle.type ?? ''), topLeft.x + 3, topLeft.y - 2);
+      ctx.fillText(String(obstacle.type ?? ''), left + 3, top - 2);
     }
   }
 
-  void floorBottomRight;
   return viewport;
 }
 
@@ -138,7 +139,10 @@ export function drawAvatars(ctx, world, viewport) {
 
   for (const user of world.users.values()) {
     if (!Number.isFinite(user?.x) || !Number.isFinite(user?.y)) continue;
-    const centre = worldToScreen(user, viewport);
+    const centre = {
+      x: viewport.offsetX + user.x * viewport.scale,
+      y: viewport.offsetY + user.y * viewport.scale,
+    };
     const isSelf = user.id === world.selfId;
     const label = avatarLabel(user, world.selfId);
 

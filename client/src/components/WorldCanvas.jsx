@@ -23,23 +23,24 @@ export default function WorldCanvas({ world, renderFrame = drawRoom }) {
     if (!ctx) return undefined;
 
     let animationFrame = 0;
-    let cssWidth = 0;
-    let cssHeight = 0;
+    // One size object for the effect's lifetime, mutated on resize —
+    // not a fresh allocation on every animation frame.
+    const size = { width: 0, height: 0 };
 
     const resize = () => {
       const dpr = window.devicePixelRatio || 1;
-      cssWidth = window.innerWidth;
-      cssHeight = window.innerHeight;
-      canvas.width = Math.max(1, Math.round(cssWidth * dpr));
-      canvas.height = Math.max(1, Math.round(cssHeight * dpr));
-      canvas.style.width = `${cssWidth}px`;
-      canvas.style.height = `${cssHeight}px`;
+      size.width = window.innerWidth;
+      size.height = window.innerHeight;
+      canvas.width = Math.max(1, Math.round(size.width * dpr));
+      canvas.height = Math.max(1, Math.round(size.height * dpr));
+      canvas.style.width = `${size.width}px`;
+      canvas.style.height = `${size.height}px`;
       // Draw in CSS pixels; the DPR transform keeps lines sharp on retina.
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     };
 
     const frame = () => {
-      renderFrame(ctx, world.current, { width: cssWidth, height: cssHeight });
+      renderFrame(ctx, world.current, size);
       animationFrame = window.requestAnimationFrame(frame);
     };
 
