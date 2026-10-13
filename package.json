@@ -1,0 +1,16 @@
+{
+  "name": "proxispeak",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ProxiSpeak — geospatial proximity audio ecosystem",
+  "engines": {
+    "node": ">=18.17"
+  },
+  "scripts": {
+    "start": "node server/src/index.js",
+    "dev:server": "npm --prefix server run dev",
+    "dev:client": "npm --prefix client run dev",
+    "build:client": "npm --prefix client run build",
+    "dev": "npm --prefix client run dev"
+  }
+}
