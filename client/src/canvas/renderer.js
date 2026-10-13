@@ -112,10 +112,19 @@ export function avatarColor(user) {
 }
 
 /** Display label: server name when known, else a short stable id tag. */
-export function avatarLabel(user, selfId, selfName) {
+export function avatarLabel(user, selfId) {
   if (user?.name) return user.name;
-  if (user?.id && user.id === selfId && selfName) return selfName;
+  if (user?.id && user.id === selfId) return 'you';
   return user?.id ? `user-${String(user.id).slice(0, 4)}` : 'guest';
+}
+
+/** Cap on drawn label length: server names run to 24 chars, plus " (you)". */
+export const MAX_AVATAR_LABEL_CHARS = 18;
+
+/** Truncate a drawn label with an ellipsis so long names cannot sprawl. */
+export function truncateLabel(text, maxChars = MAX_AVATAR_LABEL_CHARS) {
+  const value = String(text ?? '');
+  return value.length > maxChars ? `${value.slice(0, Math.max(1, maxChars - 1))}…` : value;
 }
 
 /**
@@ -131,7 +140,7 @@ export function drawAvatars(ctx, world, viewport) {
     if (!Number.isFinite(user?.x) || !Number.isFinite(user?.y)) continue;
     const centre = worldToScreen(user, viewport);
     const isSelf = user.id === world.selfId;
-    const label = avatarLabel(user, world.selfId, null);
+    const label = avatarLabel(user, world.selfId);
 
     ctx.beginPath();
     ctx.arc(centre.x, centre.y, radius, 0, Math.PI * 2);
@@ -160,7 +169,7 @@ export function drawAvatars(ctx, world, viewport) {
     // Name label above the avatar (with a " (you)" marker for self).
     ctx.font = '12px system-ui, sans-serif';
     ctx.textBaseline = 'bottom';
-    const text = isSelf ? `${label} (you)` : label;
+    const text = truncateLabel(isSelf ? `${label} (you)` : label);
     ctx.lineWidth = 3;
     ctx.strokeStyle = 'rgba(5, 7, 13, 0.8)';
     ctx.strokeText(text, centre.x, centre.y - radius - 6);
