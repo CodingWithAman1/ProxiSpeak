@@ -54,3 +54,22 @@ body {
   border: 1px solid #7f2438;
   color: #ffb4c0;
 }
+
+.world-canvas {
+  display: block;
+  position: fixed;
+  inset: 0;
+}
+.world-hud {
+  position: fixed;
+  top: 1rem;
+  left: 1rem;
+  z-index: 1;
+  padding: 0.6rem 0.8rem;
+  border-radius: 10px;
+  background: rgba(11, 16, 32, 0.82);
+  border: 1px solid #26314d;
+  color: #c3cbdd;
+  font-size: 0.9rem;
+  pointer-events: none;
+}
