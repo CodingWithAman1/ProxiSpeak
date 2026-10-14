@@ -268,19 +268,19 @@ export function App() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col p-3 md:p-5 selection:bg-cyan-500 selection:text-slate-950">
       {/* Top Header */}
-      <header className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
+      <header className="glass-panel flex flex-wrap items-center justify-between gap-3 px-5 py-3 rounded-2xl shadow-xl">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-cyan-600 to-emerald-400 flex items-center justify-center text-slate-950 shadow-lg shadow-cyan-500/20 font-black">
+          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-cyan-500 to-emerald-400 flex items-center justify-center text-slate-950 shadow-lg shadow-cyan-500/20 font-black">
             <Radio size={22} className="animate-pulse" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-lg font-black tracking-tight text-white">ProxiSpeak</h1>
-              <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
-                <TreePine size={12} /> Biophilic Calm Office
+              <h1 className="text-base font-bold tracking-tight text-white font-sans">ProxiSpeak</h1>
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
+                <TreePine size={11} /> Biophilic Calm Office
               </span>
             </div>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-slate-400 font-sans">
               Frosted glass suites, outdoor panoramic windows, botanical planters & spatial audio
             </p>
           </div>
@@ -295,18 +295,18 @@ export function App() {
             </div>
           )}
 
-          <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs">
+          <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl glass-card text-xs">
             <CloudRain size={13} className="text-cyan-400" />
-            <span className="text-slate-300 font-mono">
+            <span className="text-slate-300 font-mono text-[11px]">
               Rain Ambience: {ambientSoundEnabled ? 'Active' : 'Off'}
             </span>
           </div>
 
           <button
             onClick={() => setIsSOPModalOpen(true)}
-            className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-slate-950 font-bold text-xs transition-all shadow-md shadow-cyan-500/25 cursor-pointer"
+            className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-slate-950 font-bold text-xs transition-all shadow-md shadow-cyan-500/25 cursor-pointer"
           >
-            <FileCheck2 size={15} />
+            <FileCheck2 size={14} />
             <span>SOP & Steps</span>
           </button>
         </div>

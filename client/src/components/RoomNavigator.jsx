@@ -1,5 +1,5 @@
 import React from 'react';
-import { MapPin, Radio, Compass } from 'lucide-react';
+import { MapPin } from 'lucide-react';
 import { getContainingRoom } from '../utils/spatialGeometry';
 
 export function RoomNavigator({
@@ -10,24 +10,24 @@ export function RoomNavigator({
   const currentRoom = getContainingRoom(player, rooms);
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-900/80 border border-slate-800 backdrop-blur-xl px-4 py-2.5 rounded-2xl shadow-xl">
+    <div className="glass-panel flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 rounded-2xl shadow-xl">
       {/* Current Location Badge */}
-      <div className="flex items-center gap-2">
-        <div className="p-1.5 rounded-lg bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+      <div className="flex items-center gap-2.5">
+        <div className="w-8 h-8 rounded-xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 flex items-center justify-center">
           <MapPin size={16} />
         </div>
         <div>
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold text-slate-100">
-              {currentRoom ? currentRoom.name : 'Open Atrium / Corridor'}
+              {currentRoom ? currentRoom.name : 'Central Corridor & Atrium'}
             </span>
             {currentRoom && (
               <span
-                className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded border"
+                className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md border"
                 style={{
-                  backgroundColor: `${currentRoom.color}20`,
+                  backgroundColor: `${currentRoom.color}15`,
                   color: currentRoom.color,
-                  borderColor: `${currentRoom.color}40`,
+                  borderColor: `${currentRoom.color}35`,
                 }}
               >
                 {currentRoom.code}
@@ -41,7 +41,7 @@ export function RoomNavigator({
       </div>
 
       {/* Quick Teleport Room Buttons */}
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
         <span className="text-[11px] text-slate-400 font-mono hidden md:inline">Quick Jump:</span>
         {rooms.map((room) => {
           const isHere = currentRoom?.id === room.id;
@@ -49,10 +49,10 @@ export function RoomNavigator({
             <button
               key={room.id}
               onClick={() => onTeleportToRoom(room)}
-              className={`px-2.5 py-1 rounded-xl text-xs font-medium transition-all flex items-center gap-1.5 border ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all duration-150 flex items-center gap-2 cursor-pointer ${
                 isHere
-                  ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40 shadow-sm'
-                  : 'bg-slate-800/60 text-slate-300 border-slate-700/60 hover:bg-slate-800 hover:text-white'
+                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm shadow-cyan-500/20'
+                  : 'glass-card text-slate-300 hover:text-white hover:bg-white/5'
               }`}
             >
               <span
