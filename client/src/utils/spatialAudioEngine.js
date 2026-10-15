@@ -320,6 +320,116 @@ class SpatialAudioEngine {
   }
 
   /**
+   * Sound effect for opening/closing doors with spatial panning
+   */
+  playDoorSound(isOpen = true, pan = 0) {
+    if (this.isDeafened) return;
+    const ctx = this.initContext();
+    if (!ctx) return;
+
+    const now = ctx.currentTime;
+    let panner;
+    if (ctx.createStereoPanner) {
+      panner = ctx.createStereoPanner();
+      panner.pan.setValueAtTime(Math.max(-1, Math.min(1, pan)), now);
+    }
+
+    if (isOpen) {
+      // Unlatch click
+      const clickOsc = ctx.createOscillator();
+      const clickGain = ctx.createGain();
+      clickOsc.type = 'triangle';
+      clickOsc.frequency.setValueAtTime(800, now);
+      clickOsc.frequency.exponentialRampToValueAtTime(1400, now + 0.04);
+
+      clickGain.gain.setValueAtTime(0.001, now);
+      clickGain.gain.linearRampToValueAtTime(0.12, now + 0.02);
+      clickGain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+
+      // Gentle door creak/swing
+      const creakOsc = ctx.createOscillator();
+      const creakGain = ctx.createGain();
+      creakOsc.type = 'sine';
+      creakOsc.frequency.setValueAtTime(160, now + 0.04);
+      creakOsc.frequency.linearRampToValueAtTime(90, now + 0.22);
+
+      creakGain.gain.setValueAtTime(0.001, now + 0.04);
+      creakGain.gain.linearRampToValueAtTime(0.08, now + 0.1);
+      creakGain.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
+
+      if (panner) {
+        clickOsc.connect(clickGain);
+        creakOsc.connect(creakGain);
+        clickGain.connect(panner);
+        creakGain.connect(panner);
+        panner.connect(ctx.destination);
+      } else {
+        clickOsc.connect(clickGain);
+        creakOsc.connect(creakGain);
+        clickGain.connect(ctx.destination);
+        creakGain.connect(ctx.destination);
+      }
+
+      clickOsc.start(now);
+      clickOsc.stop(now + 0.09);
+      creakOsc.start(now + 0.04);
+      creakOsc.stop(now + 0.25);
+    } else {
+      // Solid wooden door latch closure bump
+      const bumpOsc = ctx.createOscillator();
+      const bumpGain = ctx.createGain();
+      bumpOsc.type = 'sine';
+      bumpOsc.frequency.setValueAtTime(110, now);
+      bumpOsc.frequency.exponentialRampToValueAtTime(50, now + 0.12);
+
+      bumpGain.gain.setValueAtTime(0.001, now);
+      bumpGain.gain.linearRampToValueAtTime(0.16, now + 0.02);
+      bumpGain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
+
+      if (panner) {
+        bumpOsc.connect(bumpGain);
+        bumpGain.connect(panner);
+        panner.connect(ctx.destination);
+      } else {
+        bumpOsc.connect(bumpGain);
+        bumpGain.connect(ctx.destination);
+      }
+
+      bumpOsc.start(now);
+      bumpOsc.stop(now + 0.15);
+    }
+  }
+
+  /**
+   * Sound effect for drinking from water cooler
+   */
+  playWaterDispenseSound(pan = 0) {
+    if (this.isDeafened) return;
+    const ctx = this.initContext();
+    if (!ctx) return;
+
+    const now = ctx.currentTime;
+    // 3 water bubbles
+    [0, 0.08, 0.16].forEach((delay, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      const baseFreq = 600 + i * 150;
+      osc.frequency.setValueAtTime(baseFreq, now + delay);
+      osc.frequency.exponentialRampToValueAtTime(baseFreq + 350, now + delay + 0.06);
+
+      gain.gain.setValueAtTime(0.001, now + delay);
+      gain.gain.linearRampToValueAtTime(0.09, now + delay + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + delay + 0.07);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now + delay);
+      osc.stop(now + delay + 0.08);
+    });
+  }
+
+  /**
    * Connect real user microphone for real-time visual VU meter & activity
    */
   async initMicrophone() {

@@ -178,6 +178,41 @@ export function PeersPanel({
           );
         })}
 
+        {/* Interactive Office Doors Section */}
+        <div className="p-3.5 rounded-xl glass-card space-y-2.5">
+          <div className="flex items-center justify-between">
+            <h4 className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+              <ShieldAlert size={13} className="text-amber-400" /> Office Doors & Acoustic Seals
+            </h4>
+            <span className="text-[10px] text-slate-400 font-mono">Muffles sound</span>
+          </div>
+          <div className="space-y-1.5 max-h-40 overflow-y-auto pr-0.5 custom-scrollbar">
+            {(doors || []).map((door) => (
+              <div
+                key={door.id}
+                onClick={() => onToggleDoor && onToggleDoor(door.id)}
+                className={`p-2 rounded-lg border text-xs flex items-center justify-between cursor-pointer transition-all duration-150 ${
+                  door.isOpen
+                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-200 hover:bg-emerald-500/20'
+                    : 'bg-black/30 border-white/5 text-slate-400 hover:bg-white/5'
+                }`}
+              >
+                <div>
+                  <p className="font-semibold text-slate-200 text-[11px]">{door.name}</p>
+                  <p className="text-[10px] opacity-75">{door.isOpen ? 'Audio flows freely' : 'Muffles voice 65%'}</p>
+                </div>
+                <span
+                  className={`px-2 py-0.5 rounded text-[9px] font-mono font-bold ${
+                    door.isOpen ? 'bg-emerald-500/30 text-emerald-300' : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                  }`}
+                >
+                  {door.isOpen ? 'OPEN' : 'CLOSED'}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+
         {/* Panoramic Windows & Outdoor Soundscape Card */}
         <div className="p-3.5 rounded-xl glass-card space-y-2.5">
           <div className="flex items-center justify-between">
