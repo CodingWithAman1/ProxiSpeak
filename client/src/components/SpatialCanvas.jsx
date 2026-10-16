@@ -5,7 +5,11 @@ import {
   calculateProximityGain,
   checkWallOcclusion,
   getContainingRoom,
+  resolvePlayerMovement,
+  isPositionColliding,
+  calculateStereoPan,
 } from '../utils/spatialGeometry';
+import spatialAudio from '../utils/spatialAudioEngine';
 
 export function SpatialCanvas({
   player,
@@ -21,6 +25,7 @@ export function SpatialCanvas({
   isMicActive,
   micDecibels,
   onToggleDoor,
+  onSetDoorOpen,
   onToggleWindow,
   onInteractPlant,
   onBrewCoffee,
@@ -37,6 +42,29 @@ export function SpatialCanvas({
   const [mapImageLoaded, setMapImageLoaded] = useState(false);
   const mapImageRef = useRef(null);
 
+  // Keep live references for collision engine & background loop without stale closures
+  const wallsRef = useRef(walls);
+  const doorsRef = useRef(doors);
+  const playerRef = useRef(player);
+  const peersRef = useRef(peers);
+  const collisionAlertsRef = useRef([]);
+
+  useEffect(() => {
+    wallsRef.current = walls;
+  }, [walls]);
+
+  useEffect(() => {
+    doorsRef.current = doors;
+  }, [doors]);
+
+  useEffect(() => {
+    playerRef.current = player;
+  }, [player]);
+
+  useEffect(() => {
+    peersRef.current = peers;
+  }, [peers]);
+
   // Preload the stylized office background map
   useEffect(() => {
     const img = new Image();
@@ -47,14 +75,28 @@ export function SpatialCanvas({
     };
   }, []);
 
-  // Sync target pos if teleported or seated
+  // Sync target pos if player was teleported or seated
   useEffect(() => {
-    if (Math.abs(targetPosRef.current.x - player.x) > 30 || Math.abs(targetPosRef.current.y - player.y) > 30) {
+    if (Math.abs(targetPosRef.current.x - player.x) > 35 || Math.abs(targetPosRef.current.y - player.y) > 35) {
       targetPosRef.current = { x: player.x, y: player.y };
     }
   }, [player.x, player.y]);
 
-  // Keyboard movement
+  // Helper to trigger a brief visual collision warning on restricted paths
+  const triggerCollisionWarning = useCallback((x, y, message = '⛔ Restricted Path: Solid Wall') => {
+    collisionAlertsRef.current.push({
+      x,
+      y,
+      message,
+      createdAt: Date.now(),
+    });
+    // Keep max 5 active alerts
+    if (collisionAlertsRef.current.length > 5) {
+      collisionAlertsRef.current.shift();
+    }
+  }, []);
+
+  // Keyboard movement with wall collision restriction & smooth sliding
   useEffect(() => {
     const keysDown = new Set();
 
@@ -78,7 +120,7 @@ export function SpatialCanvas({
       if (keysDown.size === 0) return;
       let dx = 0;
       let dy = 0;
-      const speed = 5.5;
+      const speed = 5.2;
 
       if (keysDown.has('w') || keysDown.has('arrowup')) dy -= speed;
       if (keysDown.has('s') || keysDown.has('arrowdown')) dy += speed;
@@ -91,10 +133,27 @@ export function SpatialCanvas({
       }
 
       setPlayer((prev) => {
-        const nextX = Math.max(25, Math.min(1000, prev.x + dx));
-        const nextY = Math.max(25, Math.min(550, prev.y + dy));
-        targetPosRef.current = { x: nextX, y: nextY };
-        return { ...prev, x: nextX, y: nextY, isSeated: false };
+        const rawCandidate = {
+          x: Math.max(24, Math.min(1000, prev.x + dx)),
+          y: Math.max(24, Math.min(548, prev.y + dy)),
+        };
+
+        // Enforce physical walls and closed doors as barriers
+        const resolved = resolvePlayerMovement(prev, rawCandidate, 12, wallsRef.current, doorsRef.current);
+
+        // If movement was blocked by a wall or closed door
+        if (Math.hypot(resolved.x - prev.x, resolved.y - prev.y) < 0.1 && (dx !== 0 || dy !== 0)) {
+          // Check if blocked by a closed door
+          const closedDoorNear = doorsRef.current.find(
+            (d) => !d.isOpen && Math.hypot(d.x + d.w / 2 - prev.x, d.y + d.h / 2 - prev.y) < 32
+          );
+          if (closedDoorNear) {
+            triggerCollisionWarning(closedDoorNear.x + closedDoorNear.w / 2, closedDoorNear.y + closedDoorNear.h / 2, '🔒 Door is Closed (Click to Open)');
+          }
+        }
+
+        targetPosRef.current = { x: resolved.x, y: resolved.y };
+        return { ...prev, x: resolved.x, y: resolved.y, isSeated: false };
       });
     }, 20);
 
@@ -103,7 +162,7 @@ export function SpatialCanvas({
       window.removeEventListener('keyup', handleKeyUp);
       clearInterval(stepInterval);
     };
-  }, [setPlayer]);
+  }, [setPlayer, triggerCollisionWarning]);
 
   // Click & Drag Interaction Handler
   const handleMouseDown = useCallback((e) => {
@@ -115,13 +174,13 @@ export function SpatialCanvas({
     const clickX = (e.clientX - rect.left) * scaleX;
     const clickY = (e.clientY - rect.top) * scaleY;
 
-    // 1. Check Doors Click
+    // 1. Check Doors Click (Manual Open / Close)
     for (const door of doors) {
       if (
-        clickX >= door.x - 10 &&
-        clickX <= door.x + door.w + 10 &&
-        clickY >= door.y - 10 &&
-        clickY <= door.y + door.h + 10
+        clickX >= door.x - 14 &&
+        clickX <= door.x + door.w + 14 &&
+        clickY >= door.y - 14 &&
+        clickY <= door.y + door.h + 14
       ) {
         if (onToggleDoor) onToggleDoor(door.id);
         return;
@@ -152,7 +211,7 @@ export function SpatialCanvas({
 
     // 4. Check Coffee Machine
     const coffee = furniture.coffeeMachine;
-    if (Math.hypot(clickX - coffee.x, clickY - coffee.y) <= 22) {
+    if (Math.hypot(clickX - coffee.x, clickY - coffee.y) <= 24) {
       if (onBrewCoffee) onBrewCoffee();
       return;
     }
@@ -193,11 +252,24 @@ export function SpatialCanvas({
       }
     }
 
-    // 9. Walk to location
+    // 9. Walk to location with Wall Collision Enforcement
+    const isTargetColliding = isPositionColliding({ x: clickX, y: clickY }, 12, wallsRef.current, doorsRef.current);
+    if (isTargetColliding) {
+      // Find if clicked on a closed door
+      const closedDoor = doorsRef.current.find(
+        (d) => !d.isOpen && clickX >= d.x - 8 && clickX <= d.x + d.w + 8 && clickY >= d.y - 8 && clickY <= d.y + d.h + 8
+      );
+      if (closedDoor) {
+        triggerCollisionWarning(clickX, clickY, '🔒 Door Closed: Click to Open');
+      } else {
+        triggerCollisionWarning(clickX, clickY, '⛔ Restricted Path: Solid Wall Barrier');
+      }
+    }
+
     targetPosRef.current = { x: clickX, y: clickY };
     isDraggingPlayer.current = true;
     if (onCanvasClick) onCanvasClick({ x: clickX, y: clickY });
-  }, [doors, windows, furniture, plants, peers, onToggleDoor, onToggleWindow, onSitChair, onBrewCoffee, onDrinkWater, onToggleWhiteboard, onInteractPlant, onPeerClick, onCanvasClick]);
+  }, [doors, windows, furniture, plants, peers, onToggleDoor, onToggleWindow, onSitChair, onBrewCoffee, onDrinkWater, onToggleWhiteboard, onInteractPlant, onPeerClick, onCanvasClick, triggerCollisionWarning]);
 
   const handleMouseMove = useCallback((e) => {
     if (!isDraggingPlayer.current) return;
@@ -216,7 +288,7 @@ export function SpatialCanvas({
     isDraggingPlayer.current = false;
   }, []);
 
-  // Main 60 FPS Render Loop
+  // Main 60 FPS Render & Animation Loop
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -226,36 +298,75 @@ export function SpatialCanvas({
     const render = () => {
       time += 0.025;
 
-      // Smooth avatar lerp
+      // --- A. Smooth Door Background Animation Lerp ---
+      doorsRef.current.forEach((door) => {
+        const target = door.isOpen ? 1 : 0;
+        const lerpSpeed = door.type === 'glass_double' ? 0.09 : 0.08;
+        if (door.openProgress === undefined) door.openProgress = target;
+        if (Math.abs(door.openProgress - target) > 0.003) {
+          door.openProgress += (target - door.openProgress) * lerpSpeed;
+        } else {
+          door.openProgress = target;
+        }
+      });
+
+      // --- B. Smooth Avatar Lerp with Wall Collision Restrictions ---
       setPlayer((prev) => {
         if (prev.isSeated) return prev;
         const tx = targetPosRef.current.x;
         const ty = targetPosRef.current.y;
         const dist = Math.hypot(tx - prev.x, ty - prev.y);
+
         if (dist > 1.2) {
-          const lerp = 0.16;
+          const stepSpeed = Math.min(dist, 4.6);
+          const angle = Math.atan2(ty - prev.y, tx - prev.x);
+          const candidate = {
+            x: prev.x + Math.cos(angle) * stepSpeed,
+            y: prev.y + Math.sin(angle) * stepSpeed,
+          };
+
+          // Apply physical wall and door restriction
+          const resolved = resolvePlayerMovement(prev, candidate, 12, wallsRef.current, doorsRef.current);
+
+          // If avatar is completely blocked from reaching the clicked destination
+          const moved = Math.hypot(resolved.x - prev.x, resolved.y - prev.y);
+          if (moved < 0.05 && dist > 5) {
+            targetPosRef.current = { x: resolved.x, y: resolved.y };
+          }
+
           return {
             ...prev,
-            x: prev.x + (tx - prev.x) * lerp,
-            y: prev.y + (ty - prev.y) * lerp,
+            x: resolved.x,
+            y: resolved.y,
           };
         }
         return prev;
       });
 
-      // Clear
+      // Clear Frame
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // --- 1. Draw Stylized Office Base Map ---
+      // --- 1. Stylized Architectural Base Map ---
       if (mapImageRef.current && mapImageLoaded) {
         ctx.drawImage(mapImageRef.current, 0, 0, canvas.width, canvas.height);
       } else {
-        // Fallback clean architectural floor
         ctx.fillStyle = '#0c121e';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
       }
 
-      // --- 2. Interactive Windows Overlay & Outdoor Weather Light ---
+      // --- 2. Subtle Blueprint Wall Boundary Guides (Shows Restricted Paths) ---
+      ctx.save();
+      ctx.strokeStyle = 'rgba(56, 189, 248, 0.08)';
+      ctx.lineWidth = 1;
+      wallsRef.current.forEach((w) => {
+        ctx.beginPath();
+        ctx.moveTo(w.start.x, w.start.y);
+        ctx.lineTo(w.end.x, w.end.y);
+        ctx.stroke();
+      });
+      ctx.restore();
+
+      // --- 3. Interactive Windows Overlay & Rain/Sun Light Beams ---
       windows.forEach((win) => {
         ctx.save();
         if (win.isOpen) {
@@ -299,82 +410,268 @@ export function SpatialCanvas({
         ctx.restore();
       });
 
-      // --- 3. Interactive Doors (Open / Closed State & Acoustic Barriers) ---
-      doors.forEach((door) => {
+      // --- 4. Interactive Doors & Automatic Sliding Gates (Background Animations) ---
+      doorsRef.current.forEach((door) => {
         ctx.save();
-        if (door.isOpen) {
-          // OPEN DOOR: Green open walkway indicator & swung door panel
-          ctx.fillStyle = 'rgba(16, 185, 129, 0.25)';
+        const progress = door.openProgress !== undefined ? door.openProgress : (door.isOpen ? 1 : 0);
+
+        if (door.type === 'glass_double') {
+          // ==========================================
+          // A. HIGH-TECH AUTOMATIC SLIDING GLASS GATES
+          // ==========================================
+          const halfW = door.w / 2;
+          const slideDist = (halfW - 5) * progress;
+
+          // Header Mounting Track & Housing
+          ctx.fillStyle = '#1e293b';
+          ctx.fillRect(door.x - 2, door.y - 3, door.w + 4, 5);
+          ctx.strokeStyle = '#475569';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(door.x - 2, door.y - 3, door.w + 4, 5);
+
+          // Floor Guide Track
+          ctx.fillStyle = '#0f172a';
+          ctx.fillRect(door.x - 2, door.y + door.h - 2, door.w + 4, 4);
+
+          // Walkway Threshold Glow (Emerald when opening/open, amber when closed)
+          const trackAlpha = 0.25 + progress * 0.45;
+          ctx.fillStyle = progress > 0.4 ? `rgba(16, 185, 129, ${trackAlpha})` : `rgba(245, 158, 11, ${trackAlpha * 0.6})`;
+          ctx.fillRect(door.x + 2, door.y + 2, door.w - 4, door.h - 4);
+
+          // Autonomous Motion Sensor Puck with Expanding Radar Rings
+          const isSensorActive = door.sensorActive;
+          const sensorPulse = Math.sin(time * 5) * 0.3 + 0.7;
+          ctx.fillStyle = isSensorActive ? '#10b981' : '#0284c7';
           ctx.beginPath();
-          ctx.roundRect(door.x, door.y, door.w, door.h, 4);
+          ctx.arc(door.x + halfW, door.y - 3, 3.5, 0, Math.PI * 2);
           ctx.fill();
 
-          ctx.strokeStyle = '#10b981';
+          if (isSensorActive) {
+            ctx.strokeStyle = `rgba(16, 185, 129, ${sensorPulse})`;
+            ctx.lineWidth = 1.4;
+            ctx.beginPath();
+            const ringR = 6 + ((time * 24) % 12);
+            ctx.arc(door.x + halfW, door.y - 3, ringR, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+
+          // --- Left Sliding Glass Panel ---
+          const leftX = door.x - slideDist;
+          ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
+          ctx.shadowBlur = 6;
+          ctx.fillStyle = 'rgba(56, 189, 248, 0.45)';
+          ctx.fillRect(leftX, door.y, halfW, door.h);
+          ctx.shadowBlur = 0;
+
+          // Panel frame & specular reflection
+          ctx.strokeStyle = progress > 0.5 ? '#38bdf8' : '#0284c7';
           ctx.lineWidth = 1.5;
-          ctx.setLineDash([3, 3]);
-          ctx.stroke();
-          ctx.setLineDash([]);
+          ctx.strokeRect(leftX, door.y, halfW, door.h);
 
-          // Swung open door leaf
-          ctx.strokeStyle = '#92400e';
-          ctx.lineWidth = 4;
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
+          ctx.lineWidth = 1;
           ctx.beginPath();
-          ctx.moveTo(door.x, door.y + door.h / 2);
-          ctx.lineTo(door.x - 12, door.y - 14);
+          ctx.moveTo(leftX + 4, door.y + 3);
+          ctx.lineTo(leftX + halfW - 4, door.y + door.h - 3);
           ctx.stroke();
 
-          // Door status tag
-          ctx.fillStyle = 'rgba(6, 78, 59, 0.9)';
+          // Left Handle Bar
+          ctx.fillStyle = '#f8fafc';
+          ctx.fillRect(leftX + halfW - 4, door.y + door.h * 0.25, 2, door.h * 0.5);
+
+          // --- Right Sliding Glass Panel ---
+          const rightX = door.x + halfW + slideDist;
+          ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
+          ctx.shadowBlur = 6;
+          ctx.fillStyle = 'rgba(56, 189, 248, 0.45)';
+          ctx.fillRect(rightX, door.y, halfW, door.h);
+          ctx.shadowBlur = 0;
+
+          ctx.strokeStyle = progress > 0.5 ? '#38bdf8' : '#0284c7';
+          ctx.lineWidth = 1.5;
+          ctx.strokeRect(rightX, door.y, halfW, door.h);
+
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
+          ctx.lineWidth = 1;
           ctx.beginPath();
-          ctx.roundRect(door.x + door.w / 2 - 32, door.y - 14, 64, 15, 7);
+          ctx.moveTo(rightX + 4, door.y + 3);
+          ctx.lineTo(rightX + halfW - 4, door.y + door.h - 3);
+          ctx.stroke();
+
+          // Right Handle Bar
+          ctx.fillStyle = '#f8fafc';
+          ctx.fillRect(rightX + 2, door.y + door.h * 0.25, 2, door.h * 0.5);
+
+          // Status Badge Pill
+          const badgeY = door.y < 100 ? door.y + door.h + 14 : door.y - 12;
+          let badgeText = 'GATE CLOSED';
+          let badgeBg = 'rgba(15, 23, 42, 0.88)';
+          let badgeColor = '#94a3b8';
+
+          if (isSensorActive) {
+            badgeText = '⚡ SENSOR: SLIDING OPEN';
+            badgeBg = 'rgba(6, 78, 59, 0.95)';
+            badgeColor = '#34d399';
+          } else if (progress > 0.85) {
+            badgeText = 'GATE OPEN (Walk)';
+            badgeBg = 'rgba(6, 78, 59, 0.92)';
+            badgeColor = '#6ee7b7';
+          } else if (progress > 0.05) {
+            badgeText = door.isOpen ? 'OPENING...' : 'CLOSING...';
+            badgeBg = 'rgba(120, 53, 15, 0.92)';
+            badgeColor = '#fde047';
+          }
+
+          ctx.fillStyle = badgeBg;
+          ctx.beginPath();
+          ctx.roundRect(door.x + halfW - 55, badgeY - 8, 110, 16, 8);
           ctx.fill();
-          ctx.fillStyle = '#6ee7b7';
+          ctx.strokeStyle = progress > 0.5 ? '#10b981' : 'rgba(255, 255, 255, 0.2)';
+          ctx.lineWidth = 1;
+          ctx.stroke();
+
+          ctx.fillStyle = badgeColor;
           ctx.font = 'bold 8px "Plus Jakarta Sans", sans-serif';
           ctx.textAlign = 'center';
-          ctx.fillText('OPEN (Walk In)', door.x + door.w / 2, door.y - 4);
+          ctx.textBaseline = 'middle';
+          ctx.fillText(badgeText, door.x + halfW, badgeY);
         } else {
-          // CLOSED DOOR: Solid barrier with acoustic lock & brass handle
+          // ==========================================
+          // B. WOODEN SINGLE-LEAF SWING DOORS
+          // ==========================================
+          const isVertical = door.orientation === 'vertical';
+          const maxAngle = Math.PI / 2.15; // ~84 degrees
+          const angle = progress * maxAngle;
+          const leafLen = isVertical ? door.h : door.w;
+          const leafThick = 4.5;
+
+          let hingeX = door.x;
+          let hingeY = door.y;
+
+          if (isVertical) {
+            hingeX = door.x + door.w / 2;
+            hingeY = door.hinge === 'bottom' ? door.y + door.h : door.y;
+          } else {
+            hingeX = door.hinge === 'right' ? door.x + door.w : door.x;
+            hingeY = door.y + door.h / 2;
+          }
+
+          // Blueprint Swing Arc Guideline
+          if (progress > 0.05) {
+            ctx.strokeStyle = 'rgba(56, 189, 248, 0.45)';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([3, 4]);
+            ctx.beginPath();
+            const baseAngle = isVertical ? (door.hinge === 'bottom' ? -Math.PI / 2 : Math.PI / 2) : (door.hinge === 'right' ? Math.PI : 0);
+            const rotSign = (door.hinge === 'right' || door.hinge === 'bottom') ? -1 : 1;
+            ctx.arc(hingeX, hingeY, leafLen, baseAngle, baseAngle + angle * rotSign, rotSign < 0);
+            ctx.stroke();
+            ctx.setLineDash([]);
+          }
+
+          // Open Walkway Threshold Highlight
+          if (progress > 0.3) {
+            ctx.fillStyle = 'rgba(16, 185, 129, 0.18)';
+            ctx.fillRect(door.x, door.y, door.w, door.h);
+            ctx.strokeStyle = 'rgba(16, 185, 129, 0.45)';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([2, 3]);
+            ctx.strokeRect(door.x, door.y, door.w, door.h);
+            ctx.setLineDash([]);
+          }
+
+          // Door Frame Jambs
+          ctx.fillStyle = '#451a03';
+          if (isVertical) {
+            ctx.fillRect(door.x - 2, door.y - 2, door.w + 4, 3);
+            ctx.fillRect(door.x - 2, door.y + door.h - 1, door.w + 4, 3);
+          } else {
+            ctx.fillRect(door.x - 2, door.y - 2, 3, door.h + 4);
+            ctx.fillRect(door.x + door.w - 1, door.y - 2, 3, door.h + 4);
+          }
+
+          // Rotating Wood Door Leaf
+          ctx.save();
+          ctx.translate(hingeX, hingeY);
+          const rotDirection = (door.hinge === 'right' || door.hinge === 'bottom') ? -1 : 1;
+          ctx.rotate(rotDirection * angle);
+
+          // Drop shadow cast onto floor
           ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
           ctx.shadowBlur = 8;
-          ctx.fillStyle = door.type.includes('glass') ? 'rgba(56, 189, 248, 0.75)' : '#78350f';
-          ctx.beginPath();
-          ctx.roundRect(door.x, door.y, door.w, door.h, 3);
-          ctx.fill();
+          ctx.shadowOffsetY = 3;
 
-          ctx.shadowBlur = 0;
-          ctx.strokeStyle = door.type.includes('glass') ? '#38bdf8' : '#b45309';
-          ctx.lineWidth = 1.5;
+          const woodGrad = ctx.createLinearGradient(0, 0, leafLen, 0);
+          woodGrad.addColorStop(0, '#78350f');
+          woodGrad.addColorStop(0.5, '#92400e');
+          woodGrad.addColorStop(1, '#b45309');
+          ctx.fillStyle = woodGrad;
+
+          if (isVertical) {
+            ctx.fillRect(-leafThick / 2, 0, leafThick, leafLen);
+            ctx.shadowBlur = 0;
+            ctx.strokeStyle = '#d97706';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(-leafThick / 2, 0, leafThick, leafLen);
+
+            // Brass Handle
+            ctx.fillStyle = '#fef08a';
+            ctx.beginPath();
+            ctx.arc(0, leafLen * 0.85, 2.5, 0, Math.PI * 2);
+            ctx.fill();
+          } else {
+            ctx.fillRect(0, -leafThick / 2, leafLen, leafThick);
+            ctx.shadowBlur = 0;
+            ctx.strokeStyle = '#d97706';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(0, -leafThick / 2, leafLen, leafThick);
+
+            // Brass Handle
+            ctx.fillStyle = '#fef08a';
+            ctx.beginPath();
+            ctx.arc(leafLen * 0.85, 0, 2.5, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.restore();
+
+          // Status Badge Pill
+          const isFullyOpen = progress > 0.85;
+          const isMoving = progress > 0.05 && progress < 0.95;
+          const tagY = door.y < 100 ? door.y + door.h + 14 : door.y - 10;
+          const midX = door.x + door.w / 2;
+
+          ctx.fillStyle = progress > 0.5 ? 'rgba(6, 78, 59, 0.9)' : 'rgba(15, 23, 42, 0.88)';
+          ctx.beginPath();
+          ctx.roundRect(midX - 42, tagY - 7, 84, 15, 7);
+          ctx.fill();
+          ctx.strokeStyle = progress > 0.5 ? '#10b981' : 'rgba(255, 255, 255, 0.2)';
+          ctx.lineWidth = 1;
           ctx.stroke();
 
-          // Door Handle
-          ctx.fillStyle = '#fef08a';
-          ctx.beginPath();
-          ctx.arc(door.x + door.w - 6, door.y + door.h / 2, 2.5, 0, Math.PI * 2);
-          ctx.fill();
-
-          // Closed Door Tag
-          ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
-          ctx.beginPath();
-          ctx.roundRect(door.x + door.w / 2 - 30, door.y - 14, 60, 15, 7);
-          ctx.fill();
-          ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
-          ctx.stroke();
-          ctx.fillStyle = '#cbd5e1';
+          ctx.fillStyle = progress > 0.5 ? '#6ee7b7' : '#cbd5e1';
           ctx.font = 'bold 8px "Plus Jakarta Sans", sans-serif';
           ctx.textAlign = 'center';
-          ctx.fillText('DOOR CLOSED', door.x + door.w / 2, door.y - 4);
+          ctx.textBaseline = 'middle';
+          ctx.fillText(
+            isMoving
+              ? (door.isOpen ? 'OPENING...' : 'CLOSING...')
+              : isFullyOpen
+              ? 'OPEN (Walk)'
+              : 'CLOSED (Click)',
+            midX,
+            tagY
+          );
         }
         ctx.restore();
       });
 
-      // --- 4. Interactive Chairs Overlay & Sit Indicators ---
+      // --- 5. Interactive Chairs Overlay & Sit Indicators ---
       const table = furniture.conferenceTable;
       table.chairs.forEach((chair) => {
-        const isPlayerHere = player.isSeated && Math.hypot(player.x - chair.x, player.y - chair.y) < 10;
+        const isPlayerHere = player.isSeated && Math.hypot(player.x - chair.x, player.y - chair.y) < 12;
         const isOccupied = chair.occupant || isPlayerHere;
 
         if (!isOccupied) {
-          // Subtle glowing "Sit" pulse for empty chairs
           ctx.save();
           const chairPulse = Math.sin(time * 3 + chair.x) * 0.3 + 0.7;
           ctx.strokeStyle = `rgba(56, 189, 248, ${chairPulse * 0.5})`;
@@ -383,19 +680,20 @@ export function SpatialCanvas({
           ctx.arc(chair.x, chair.y, 11, 0, Math.PI * 2);
           ctx.stroke();
 
-          ctx.fillStyle = `rgba(15, 23, 42, 0.7)`;
+          ctx.fillStyle = `rgba(15, 23, 42, 0.75)`;
           ctx.beginPath();
           ctx.roundRect(chair.x - 14, chair.y - 7, 28, 14, 5);
           ctx.fill();
           ctx.fillStyle = '#38bdf8';
           ctx.font = 'bold 8px "Plus Jakarta Sans", sans-serif';
           ctx.textAlign = 'center';
-          ctx.fillText('SIT', chair.x, chair.y + 3);
+          ctx.textBaseline = 'middle';
+          ctx.fillText('SIT', chair.x, chair.y);
           ctx.restore();
         }
       });
 
-      // --- 5. Interactive Coffee Machine Animated Steam ---
+      // --- 6. Interactive Coffee Machine Animated Steam ---
       const coffee = furniture.coffeeMachine;
       ctx.save();
       const steamY = coffee.y - 8 - ((time * 20) % 20);
@@ -413,10 +711,11 @@ export function SpatialCanvas({
       ctx.fillStyle = '#fef3c7';
       ctx.font = 'bold 7px "Plus Jakarta Sans", sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('☕ BREW', coffee.x, coffee.y + 25);
+      ctx.textBaseline = 'middle';
+      ctx.fillText('☕ BREW', coffee.x, coffee.y + 22);
       ctx.restore();
 
-      // --- 6. Interactive Whiteboard Banner ---
+      // --- 7. Interactive Whiteboard Banner ---
       const wb = furniture.whiteboard;
       ctx.save();
       ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
@@ -429,19 +728,31 @@ export function SpatialCanvas({
       ctx.fillStyle = '#38bdf8';
       ctx.font = 'bold 8px "Plus Jakarta Sans", sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText(`📋 ${wb.slides[wb.slideIndex].slice(0, 26)}...`, wb.x + wb.w / 2, wb.y + wb.h + 13);
+      ctx.textBaseline = 'middle';
+      ctx.fillText(`📋 ${wb.slides[wb.slideIndex].slice(0, 26)}...`, wb.x + wb.w / 2, wb.y + wb.h + 10);
       ctx.restore();
 
-      // --- 7. Spatial Mesh Audio Connection Beams ---
-      // Combine walls and CLOSED doors for acoustic sound occlusion
-      const activeAcousticWalls = [...walls];
-      doors.forEach((door) => {
-        if (!door.isOpen) {
-          activeAcousticWalls.push({
-            id: `wall-closed-${door.id}`,
-            start: { x: door.x, y: door.y + door.h / 2 },
-            end: { x: door.x + door.w, y: door.y + door.h / 2 },
-          });
+      // --- 8. Spatial Mesh Audio Connection Beams ---
+      // Combine walls and closed doors for acoustic sound occlusion
+      const activeAcousticWalls = [...wallsRef.current];
+      doorsRef.current.forEach((door) => {
+        const isPassable = door.isOpen && (door.openProgress === undefined || door.openProgress >= 0.65);
+        if (!isPassable) {
+          if (door.orientation === 'vertical') {
+            const midX = door.x + door.w / 2;
+            activeAcousticWalls.push({
+              id: `wall-closed-${door.id}`,
+              start: { x: midX, y: door.y },
+              end: { x: midX, y: door.y + door.h },
+            });
+          } else {
+            const midY = door.y + door.h / 2;
+            activeAcousticWalls.push({
+              id: `wall-closed-${door.id}`,
+              start: { x: door.x, y: midY },
+              end: { x: door.x + door.w, y: midY },
+            });
+          }
         }
       });
 
@@ -500,7 +811,7 @@ export function SpatialCanvas({
         }
       });
 
-      // --- 8. Local Player Earshot / Hearing Radius Bubble ---
+      // --- 9. Local Player Earshot / Hearing Radius Bubble ---
       ctx.save();
       const pulse = Math.sin(time * 2.5) * 3;
       const effectiveRadius = earshotRadius + pulse;
@@ -532,7 +843,7 @@ export function SpatialCanvas({
       ctx.setLineDash([]);
       ctx.restore();
 
-      // --- 9. Remote Peers Avatars ---
+      // --- 10. Remote Peers Avatars ---
       peers.forEach((peer) => {
         ctx.save();
         const dist = calculateDistance(player, peer);
@@ -586,7 +897,7 @@ export function SpatialCanvas({
         ctx.restore();
       });
 
-      // --- 10. Local Player Avatar ---
+      // --- 11. Local Player Avatar ---
       ctx.save();
       if (isMicActive && micDecibels > 0.05) {
         const micRipple = 18 + micDecibels * 30;
@@ -640,6 +951,39 @@ export function SpatialCanvas({
       }
       ctx.restore();
 
+      // --- 12. Path Restriction Collision Warning Alerts (Animated Ping) ---
+      const now = Date.now();
+      collisionAlertsRef.current = collisionAlertsRef.current.filter((alert) => now - alert.createdAt < 1800);
+
+      collisionAlertsRef.current.forEach((alert) => {
+        ctx.save();
+        const age = (now - alert.createdAt) / 1800; // 0 to 1
+        const alpha = Math.max(0, 1 - age);
+        const rippleRad = 12 + age * 26;
+
+        ctx.strokeStyle = `rgba(239, 68, 68, ${alpha * 0.9})`;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.arc(alert.x, alert.y, rippleRad, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.fillStyle = `rgba(15, 23, 42, ${alpha * 0.92})`;
+        ctx.beginPath();
+        const msgW = 160;
+        ctx.roundRect(alert.x - msgW / 2, alert.y - 32, msgW, 20, 6);
+        ctx.fill();
+        ctx.strokeStyle = `rgba(239, 68, 68, ${alpha})`;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        ctx.fillStyle = `rgba(254, 202, 202, ${alpha})`;
+        ctx.font = 'bold 9px "Plus Jakarta Sans", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(alert.message, alert.x, alert.y - 22);
+        ctx.restore();
+      });
+
       animFrameRef.current = requestAnimationFrame(render);
     };
 
@@ -648,7 +992,7 @@ export function SpatialCanvas({
     return () => {
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     };
-  }, [player, peers, rooms, walls, doors, windows, plants, furniture, earshotRadius, isMicActive, micDecibels, mapImageLoaded, setPlayer]);
+  }, [player, peers, rooms, windows, plants, furniture, earshotRadius, isMicActive, micDecibels, mapImageLoaded, setPlayer]);
 
   return (
     <div className="relative w-full h-full select-none overflow-hidden rounded-2xl glass-panel shadow-2xl flex items-center justify-center bg-slate-950">
@@ -664,9 +1008,12 @@ export function SpatialCanvas({
       {/* Interactive Controls Overlay Pill */}
       <div className="absolute top-4 left-4 glass-card px-3.5 py-2 text-xs text-slate-300 flex items-center gap-3 pointer-events-none shadow-xl rounded-xl">
         <span className="flex h-2 w-2 rounded-full bg-cyan-400 animate-ping" />
-        <span>Click <strong className="text-cyan-300">Doors</strong> to Open/Close • Click <strong className="text-emerald-300">Windows</strong> for rain audio • Click <strong className="text-amber-300">Chairs</strong> to Sit</span>
+        <span>
+          <strong className="text-cyan-300">Paths Restricted:</strong> Avatars cannot walk through walls or closed doors • Walk near <strong className="text-emerald-300">Glass Gates</strong> for Auto Sensors • Click <strong className="text-amber-300">Doors</strong> to Toggle
+        </span>
       </div>
     </div>
   );
 }
+
 export default SpatialCanvas;

@@ -401,6 +401,81 @@ class SpatialAudioEngine {
   }
 
   /**
+   * Sound effect for high-tech automatic sliding glass gate
+   * Produces smooth pneumatic air hiss and futuristic servo glide
+   */
+  playGlassGateSound(isOpen = true, pan = 0) {
+    if (this.isDeafened) return;
+    const ctx = this.initContext();
+    if (!ctx) return;
+
+    const now = ctx.currentTime;
+    let panner;
+    if (ctx.createStereoPanner) {
+      panner = ctx.createStereoPanner();
+      panner.pan.setValueAtTime(Math.max(-1, Math.min(1, pan)), now);
+    }
+
+    // Pneumatic air release / whoosh
+    const bufferSize = Math.floor(ctx.sampleRate * 0.22);
+    const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const output = noiseBuffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      output[i] = (Math.random() * 2 - 1) * 0.05;
+    }
+    const noise = ctx.createBufferSource();
+    noise.buffer = noiseBuffer;
+
+    const noiseFilter = ctx.createBiquadFilter();
+    noiseFilter.type = 'bandpass';
+    noiseFilter.frequency.setValueAtTime(isOpen ? 2200 : 1600, now);
+
+    const noiseGain = ctx.createGain();
+    noiseGain.gain.setValueAtTime(0.001, now);
+    noiseGain.gain.linearRampToValueAtTime(0.06, now + 0.03);
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+
+    // High-tech servo glide tone
+    const osc = ctx.createOscillator();
+    const oscGain = ctx.createGain();
+    osc.type = 'sine';
+    if (isOpen) {
+      osc.frequency.setValueAtTime(440, now);
+      osc.frequency.exponentialRampToValueAtTime(880, now + 0.18);
+    } else {
+      osc.frequency.setValueAtTime(700, now);
+      osc.frequency.exponentialRampToValueAtTime(320, now + 0.18);
+    }
+
+    oscGain.gain.setValueAtTime(0.001, now);
+    oscGain.gain.linearRampToValueAtTime(0.05, now + 0.02);
+    oscGain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+
+    if (panner) {
+      noise.connect(noiseFilter);
+      noiseFilter.connect(noiseGain);
+      noiseGain.connect(panner);
+
+      osc.connect(oscGain);
+      oscGain.connect(panner);
+
+      panner.connect(ctx.destination);
+    } else {
+      noise.connect(noiseFilter);
+      noiseFilter.connect(noiseGain);
+      noiseGain.connect(ctx.destination);
+
+      osc.connect(oscGain);
+      oscGain.connect(ctx.destination);
+    }
+
+    noise.start(now);
+    noise.stop(now + 0.22);
+    osc.start(now);
+    osc.stop(now + 0.22);
+  }
+
+  /**
    * Sound effect for drinking from water cooler
    */
   playWaterDispenseSound(pan = 0) {

@@ -167,20 +167,152 @@ export function App() {
     return () => clearInterval(interval);
   }, []);
 
-  // Door toggle (Open/Close with realistic acoustic latch sound)
+  // Door toggle (Open/Close with realistic acoustic latch or pneumatic sliding sound)
   const handleToggleDoor = useCallback((doorId) => {
     setDoors((prev) =>
       prev.map((door) => {
         if (door.id === doorId) {
           const nextOpen = !door.isOpen;
           const pan = calculateStereoPan(player, { x: door.x + door.w / 2, y: door.y + door.h / 2 }, 250);
-          spatialAudio.playDoorSound(nextOpen, pan);
-          return { ...door, isOpen: nextOpen };
+          if (door.type === 'glass_double') {
+            spatialAudio.playGlassGateSound(nextOpen, pan);
+          } else {
+            spatialAudio.playDoorSound(nextOpen, pan);
+          }
+          return {
+            ...door,
+            isOpen: nextOpen,
+            targetOpen: nextOpen ? 1 : 0,
+            sensorActive: false, // Manual override cancels auto sensor timer
+          };
         }
         return door;
       })
     );
   }, [player]);
+
+  // Programmatic door/gate state setter (used by proximity sensors & background routines)
+  const handleSetDoorOpen = useCallback((doorId, isOpen, triggeredBySensor = false) => {
+    setDoors((prev) =>
+      prev.map((door) => {
+        if (door.id === doorId) {
+          if (door.isOpen === isOpen) return door;
+          const pan = calculateStereoPan(player, { x: door.x + door.w / 2, y: door.y + door.h / 2 }, 250);
+          if (door.type === 'glass_double') {
+            spatialAudio.playGlassGateSound(isOpen, pan);
+          } else {
+            spatialAudio.playDoorSound(isOpen, pan);
+          }
+          return {
+            ...door,
+            isOpen,
+            targetOpen: isOpen ? 1 : 0,
+            sensorActive: triggeredBySensor,
+            lastSensorTriggered: Date.now(),
+          };
+        }
+        return door;
+      })
+    );
+  }, [player]);
+
+  // Autonomous Background Motion Sensors for Double Glass Gates
+  useEffect(() => {
+    const sensorInterval = setInterval(() => {
+      setDoors((prevDoors) => {
+        let hasChanges = false;
+        const now = Date.now();
+
+        const updated = prevDoors.map((door) => {
+          if (!door.autoSensor) return door;
+
+          const gateCenterX = door.x + door.w / 2;
+          const gateCenterY = door.y + door.h / 2;
+
+          // Proximity detection: is local player or any peer within 72px?
+          const isPlayerNear = Math.hypot(player.x - gateCenterX, player.y - gateCenterY) < 72;
+          const isPeerNear = peers.some(
+            (p) => Math.hypot(p.x - gateCenterX, p.y - gateCenterY) < 72
+          );
+
+          const someoneNear = isPlayerNear || isPeerNear;
+
+          if (someoneNear) {
+            if (!door.isOpen) {
+              hasChanges = true;
+              const pan = calculateStereoPan(player, { x: gateCenterX, y: gateCenterY }, 250);
+              spatialAudio.playGlassGateSound(true, pan);
+              return {
+                ...door,
+                isOpen: true,
+                targetOpen: 1,
+                sensorActive: true,
+                lastSensorTriggered: now,
+              };
+            } else if (door.sensorActive) {
+              // Refresh activity timestamp while someone remains near
+              return { ...door, lastSensorTriggered: now };
+            }
+          } else {
+            // If opened by motion sensor and nobody has been near for > 3.8 seconds
+            if (door.isOpen && door.sensorActive && now - (door.lastSensorTriggered || 0) > 3800) {
+              hasChanges = true;
+              const pan = calculateStereoPan(player, { x: gateCenterX, y: gateCenterY }, 250);
+              spatialAudio.playGlassGateSound(false, pan);
+              return {
+                ...door,
+                isOpen: false,
+                targetOpen: 0,
+                sensorActive: false,
+              };
+            }
+          }
+
+          return door;
+        });
+
+        return hasChanges ? updated : prevDoors;
+      });
+    }, 200);
+
+    return () => clearInterval(sensorInterval);
+  }, [player, peers]);
+
+  // Autonomous Colleague Office Activity in Background (Periodic door interactions)
+  useEffect(() => {
+    const ambientRoutine = setInterval(() => {
+      const candidateDoors = ['door-breakroom', 'door-private'];
+      const chosenId = candidateDoors[Math.floor(Math.random() * candidateDoors.length)];
+
+      setDoors((prev) =>
+        prev.map((d) => {
+          if (d.id === chosenId && !d.isOpen) {
+            const pan = calculateStereoPan(player, { x: d.x + d.w / 2, y: d.y + d.h / 2 }, 250);
+            spatialAudio.playDoorSound(true, pan);
+
+            // Close after 4.5 seconds
+            setTimeout(() => {
+              setDoors((innerPrev) =>
+                innerPrev.map((innerD) => {
+                  if (innerD.id === chosenId && innerD.isOpen) {
+                    spatialAudio.playDoorSound(false, pan);
+                    return { ...innerD, isOpen: false, targetOpen: 0 };
+                  }
+                  return innerD;
+                })
+              );
+            }, 4500);
+
+            return { ...d, isOpen: true, targetOpen: 1 };
+          }
+          return d;
+        })
+      );
+    }, 24000);
+
+    return () => clearInterval(ambientRoutine);
+  }, [player]);
+
 
   // Window toggle (Open/Close with sound)
   const handleToggleWindow = useCallback((windowId) => {
@@ -383,6 +515,7 @@ export function App() {
             isMicActive={!isMuted}
             micDecibels={micDecibels}
             onToggleDoor={handleToggleDoor}
+            onSetDoorOpen={handleSetDoorOpen}
             onToggleWindow={handleToggleWindow}
             onInteractPlant={handleInteractPlant}
             onBrewCoffee={handleBrewCoffee}

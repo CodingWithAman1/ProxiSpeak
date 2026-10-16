@@ -20,9 +20,9 @@ export const INITIAL_ROOMS = [
     name: 'Executive Boardroom',
     code: 'CONF-101',
     description: 'Conference room with 9-seat walnut table, presentation screen & forest windows',
-    x: 730,
+    x: 742,
     y: 15,
-    w: 265,
+    w: 256,
     h: 235,
     color: '#06b6d4', // Cyan
     doorId: 'door-boardroom',
@@ -32,9 +32,9 @@ export const INITIAL_ROOMS = [
     name: 'Cafeteria & Lounge',
     code: 'CAFE-102',
     description: 'Checkerboard lounge with vending, microwave, coffee station & sofas',
-    x: 550,
+    x: 558,
     y: 15,
-    w: 180,
+    w: 184,
     h: 235,
     color: '#10b981', // Emerald
     doorId: 'door-breakroom',
@@ -70,7 +70,7 @@ export const INITIAL_ROOMS = [
     description: 'Central greeting desk, waiting armchairs, and colorful area rug',
     x: 300,
     y: 285,
-    w: 245,
+    w: 258,
     h: 270,
     color: '#f59e0b', // Amber
     doorId: null,
@@ -80,10 +80,10 @@ export const INITIAL_ROOMS = [
     name: 'Lead Director Office',
     code: 'OFFICE-201',
     description: 'Executive office with desk, computer, bookshelf & guest seating',
-    x: 800,
-    y: 250,
-    w: 195,
-    h: 145,
+    x: 808,
+    y: 245,
+    w: 190,
+    h: 150,
     color: '#ec4899', // Rose
     doorId: 'door-manager',
   },
@@ -93,26 +93,30 @@ export const INITIAL_ROOMS = [
     code: 'OFFICE-202',
     description: 'Quiet concentration booth with desk and ficus bonsai',
     x: 830,
-    y: 410,
-    w: 165,
-    h: 145,
+    y: 415,
+    w: 168,
+    h: 135,
     color: '#a855f7', // Purple
     doorId: 'door-private',
   },
 ];
 
-// Interactive Doors (Click or walk into them to Open / Close & toggle sound occlusion)
+// Interactive Doors & Gates with Smooth Opening / Closing Background Animations
 export const INITIAL_DOORS = [
   {
     id: 'door-boardroom',
     name: 'Boardroom Door',
     roomId: 'boardroom',
     x: 772,
-    y: 228,
+    y: 232,
     w: 34,
-    h: 16,
+    h: 20,
     isOpen: false,
+    openProgress: 0,
+    targetOpen: 0,
     type: 'wood_single',
+    orientation: 'horizontal',
+    hinge: 'left', // swings inward to the left
     label: 'Boardroom Door',
   },
   {
@@ -120,23 +124,31 @@ export const INITIAL_DOORS = [
     name: 'Cafeteria Door',
     roomId: 'breakroom',
     x: 620,
-    y: 228,
+    y: 232,
     w: 34,
-    h: 16,
+    h: 20,
     isOpen: true,
+    openProgress: 1,
+    targetOpen: 1,
     type: 'wood_single',
+    orientation: 'horizontal',
+    hinge: 'left',
     label: 'Cafeteria Door',
   },
   {
     id: 'door-top-entrance',
-    name: 'North Entrance Doors',
+    name: 'North Glass Entrance',
     roomId: 'hallway',
     x: 474,
-    y: 62,
-    w: 56,
+    y: 48,
+    w: 58,
     h: 36,
     isOpen: false,
-    type: 'glass_double',
+    openProgress: 0,
+    targetOpen: 0,
+    type: 'glass_double', // sliding automatic glass gate
+    orientation: 'horizontal',
+    autoSensor: true,
     label: 'North Entrance',
   },
   {
@@ -144,60 +156,80 @@ export const INITIAL_DOORS = [
     name: 'Atrium Glass Doors',
     roomId: 'hallway',
     x: 472,
-    y: 338,
-    w: 58,
-    h: 36,
+    y: 270,
+    w: 60,
+    h: 32,
     isOpen: true,
-    type: 'glass_double',
+    openProgress: 1,
+    targetOpen: 1,
+    type: 'glass_double', // sliding automatic glass gate
+    orientation: 'horizontal',
+    autoSensor: true,
     label: 'Atrium Glass Doors',
   },
   {
     id: 'door-bottom-entrance',
-    name: 'South Entrance Doors',
+    name: 'South Glass Entrance',
     roomId: 'hallway',
     x: 472,
-    y: 520,
-    w: 58,
+    y: 524,
+    w: 60,
     h: 36,
     isOpen: false,
+    openProgress: 0,
+    targetOpen: 0,
     type: 'glass_double',
+    orientation: 'horizontal',
+    autoSensor: true,
     label: 'South Entrance',
   },
   {
     id: 'door-manager',
     name: 'Director Office Door',
     roomId: 'manager_office',
-    x: 778,
+    x: 800,
     y: 275,
-    w: 26,
-    h: 16,
+    w: 16,
+    h: 28,
     isOpen: false,
+    openProgress: 0,
+    targetOpen: 0,
     type: 'wood_single',
+    orientation: 'vertical',
+    hinge: 'top',
     label: 'Director Office Door',
-  },
-  {
-    id: 'door-private',
-    name: 'Focus Pod Door',
-    roomId: 'private_office',
-    x: 875,
-    y: 425,
-    w: 26,
-    h: 16,
-    isOpen: false,
-    type: 'wood_single',
-    label: 'Focus Pod Door',
   },
   {
     id: 'door-restroom',
     name: 'Restroom Door',
     roomId: 'restroom',
     x: 778,
-    y: 425,
-    w: 24,
-    h: 16,
+    y: 408,
+    w: 26,
+    h: 20,
     isOpen: false,
+    openProgress: 0,
+    targetOpen: 0,
     type: 'wood_single',
+    orientation: 'horizontal',
+    hinge: 'left',
     label: 'Restroom Door',
+  },
+  {
+    id: 'door-private',
+    name: 'Focus Pod Door',
+    roomId: 'private_office',
+    x: 875,
+    y: 408,
+    w: 28,
+    h: 20,
+    isOpen: false,
+    openProgress: 0,
+    targetOpen: 0,
+    type: 'wood_single',
+    orientation: 'horizontal',
+    hinge: 'left',
+    label: 'Focus Pod Door',
   },
 ];
 
@@ -324,30 +356,62 @@ export const OFFICE_FURNITURE = {
   },
 };
 
-// Acoustic Walls for sound occlusion calculations
-// Doors become acoustic barriers ONLY when closed!
+// Acoustic Walls for sound occlusion calculations & physical collision boundaries
+// Avatars CANNOT walk through these walls!
 export const INITIAL_WALLS = [
-  // Boardroom left wall
-  { id: 'w-br-left', start: { x: 730, y: 15 }, end: { x: 730, y: 248 }, label: 'Boardroom West Wall' },
-  // Boardroom bottom wall (has door at 772)
-  { id: 'w-br-bot-1', start: { x: 730, y: 248 }, end: { x: 772, y: 248 }, label: 'Boardroom South Wall 1' },
-  { id: 'w-br-bot-2', start: { x: 806, y: 248 }, end: { x: 990, y: 248 }, label: 'Boardroom South Wall 2' },
+  // 1. Exterior Boundary Walls (keeps avatar inside the office map)
+  { id: 'w-top-1', start: { x: 18, y: 24 }, end: { x: 474, y: 24 }, label: 'North Boundary 1' },
+  { id: 'w-top-2', start: { x: 532, y: 24 }, end: { x: 994, y: 24 }, label: 'North Boundary 2' },
+  { id: 'w-bot-1', start: { x: 18, y: 546 }, end: { x: 472, y: 546 }, label: 'South Boundary 1' },
+  { id: 'w-bot-2', start: { x: 532, y: 546 }, end: { x: 994, y: 546 }, label: 'South Boundary 2' },
+  { id: 'w-left', start: { x: 18, y: 24 }, end: { x: 18, y: 546 }, label: 'West Boundary' },
+  { id: 'w-right', start: { x: 994, y: 24 }, end: { x: 994, y: 546 }, label: 'East Boundary' },
 
-  // Breakroom left wall
-  { id: 'w-cafe-left', start: { x: 550, y: 15 }, end: { x: 550, y: 248 }, label: 'Cafeteria West Wall' },
-  // Breakroom bottom wall (has door at 620)
-  { id: 'w-cafe-bot-1', start: { x: 550, y: 248 }, end: { x: 620, y: 248 }, label: 'Cafeteria South Wall 1' },
-  { id: 'w-cafe-bot-2', start: { x: 654, y: 248 }, end: { x: 730, y: 248 }, label: 'Cafeteria South Wall 2' },
+  // 2. Executive Boardroom Walls (room in top right)
+  { id: 'w-br-w', start: { x: 742, y: 24 }, end: { x: 742, y: 242 }, label: 'Boardroom West Wall' },
+  { id: 'w-br-s1', start: { x: 742, y: 242 }, end: { x: 772, y: 242 }, label: 'Boardroom South Wall 1' },
+  // Door gap is at x: 772 to 806
+  { id: 'w-br-s2', start: { x: 806, y: 242 }, end: { x: 994, y: 242 }, label: 'Boardroom South Wall 2' },
 
-  // Dev Hub right boundary dividing wall
-  { id: 'w-dev-right-1', start: { x: 275, y: 15 }, end: { x: 275, y: 260 }, label: 'Dev Hub Boundary' },
-  { id: 'w-dev-right-2', start: { x: 300, y: 285 }, end: { x: 300, y: 555 }, label: 'Design Hub Boundary' },
+  // 3. Cafeteria & Lounge Walls (top middle-right)
+  { id: 'w-cafe-w', start: { x: 558, y: 24 }, end: { x: 558, y: 242 }, label: 'Cafeteria West Wall' },
+  { id: 'w-cafe-s1', start: { x: 558, y: 242 }, end: { x: 620, y: 242 }, label: 'Cafeteria South Wall 1' },
+  // Door gap is at x: 620 to 654
+  { id: 'w-cafe-s2', start: { x: 654, y: 242 }, end: { x: 742, y: 242 }, label: 'Cafeteria South Wall 2' },
 
-  // Director office boundary
-  { id: 'w-dir-top', start: { x: 800, y: 248 }, end: { x: 990, y: 248 }, label: 'Director North Wall' },
-  { id: 'w-dir-bot', start: { x: 800, y: 395 }, end: { x: 990, y: 395 }, label: 'Director South Wall' },
-  { id: 'w-dir-left-1', start: { x: 800, y: 248 }, end: { x: 800, y: 275 }, label: 'Director West Wall 1' },
-  { id: 'w-dir-left-2', start: { x: 800, y: 301 }, end: { x: 800, y: 395 }, label: 'Director West Wall 2' },
+  // 4. Dev Hub Right Partition (separating Left Dev Hub from Central Hallway)
+  { id: 'w-dev-r1', start: { x: 275, y: 24 }, end: { x: 275, y: 260 }, label: 'Dev Hub North Wall' },
+  // Open walkway between y: 260 and y: 295
+  { id: 'w-dev-r2', start: { x: 300, y: 295 }, end: { x: 300, y: 546 }, label: 'Dev Hub South Wall' },
+
+  // 5. Central Corridor Dividing Wall (separates top hallway and reception)
+  { id: 'w-hall-s1', start: { x: 300, y: 285 }, end: { x: 472, y: 285 }, label: 'Central Corridor Wall 1' },
+  // Atrium Glass Doors at x: 472 to 532
+  { id: 'w-hall-s2', start: { x: 532, y: 285 }, end: { x: 742, y: 285 }, label: 'Central Corridor Wall 2' },
+
+  // 6. Kitchen Lower Lounge (Checkerboard area left boundary)
+  { id: 'w-cafe-low-w', start: { x: 558, y: 285 }, end: { x: 558, y: 546 }, label: 'Lower Kitchen West Wall' },
+
+  // 7. Lead Director Office (Middle Right)
+  { id: 'w-dir-n', start: { x: 808, y: 242 }, end: { x: 994, y: 242 }, label: 'Director North Wall' },
+  { id: 'w-dir-s', start: { x: 808, y: 395 }, end: { x: 994, y: 395 }, label: 'Director South Wall' },
+  { id: 'w-dir-w1', start: { x: 808, y: 242 }, end: { x: 808, y: 275 }, label: 'Director West Wall 1' },
+  // Door gap is at y: 275 to 302
+  { id: 'w-dir-w2', start: { x: 808, y: 302 }, end: { x: 808, y: 395 }, label: 'Director West Wall 2' },
+
+  // 8. Restroom & Focus Pod (Bottom Right)
+  { id: 'w-pod-n1', start: { x: 742, y: 418 }, end: { x: 778, y: 418 }, label: 'Restroom North Wall' },
+  // Restroom door gap at x: 778 to 804
+  { id: 'w-pod-n2', start: { x: 804, y: 418 }, end: { x: 875, y: 418 }, label: 'Mid Pod North Wall' },
+  // Focus pod door gap at x: 875 to 903
+  { id: 'w-pod-n3', start: { x: 903, y: 418 }, end: { x: 994, y: 418 }, label: 'Focus Pod North Wall' },
+  { id: 'w-pod-mid', start: { x: 830, y: 418 }, end: { x: 830, y: 546 }, label: 'Restroom Divider Wall' },
+
+  // 9. Conference Table Solid Collision Core (cannot walk onto the center table slab)
+  { id: 'obs-tbl-t', start: { x: 805, y: 138 }, end: { x: 900, y: 138 }, label: 'Boardroom Table Top' },
+  { id: 'obs-tbl-b', start: { x: 805, y: 172 }, end: { x: 900, y: 172 }, label: 'Boardroom Table Bottom' },
+  { id: 'obs-tbl-l', start: { x: 805, y: 138 }, end: { x: 805, y: 172 }, label: 'Boardroom Table Left' },
+  { id: 'obs-tbl-r', start: { x: 900, y: 138 }, end: { x: 900, y: 172 }, label: 'Boardroom Table Right' },
 ];
 
 export const INITIAL_PEERS = [
