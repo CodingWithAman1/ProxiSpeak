@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="571" viewBox="0 0 1024 571">
+  <defs>
+    <pattern id="oak" width="84" height="36" patternUnits="userSpaceOnUse">
+      <rect width="84" height="36" fill="#bb895d"/>
+      <path d="M0 1H84M0 35H84M43 1V18M12 18V35M72 18V35" fill="none" stroke="#9b6e48" stroke-opacity=".28" stroke-width="1"/>
+      <path d="M2 5H39M48 22H68" stroke="#e2ba8e" stroke-opacity=".2" stroke-width="1"/>
+    </pattern>
+    <pattern id="carpet" width="32" height="32" patternUnits="userSpaceOnUse">
+      <rect width="32" height="32" fill="#467c78"/>
+      <path d="M0 0H32M0 16H32M0 0V32M16 0V32" stroke="#a5c1ad" stroke-opacity=".07" stroke-width="1"/>
+      <circle cx="8" cy="8" r="1" fill="#d7d2b7" fill-opacity=".12"/>
+    </pattern>
+    <pattern id="tile" width="28" height="28" patternUnits="userSpaceOnUse">
+      <rect width="28" height="28" fill="#e5d8bc"/>
+      <path d="M28 0H0V28" fill="none" stroke="#b9a98c" stroke-opacity=".42" stroke-width="1"/>
+    </pattern>
+    <pattern id="terrazzo" width="36" height="36" patternUnits="userSpaceOnUse">
+      <rect width="36" height="36" fill="#cdbb9e"/>
+      <circle cx="5" cy="8" r="1.2" fill="#967b60" fill-opacity=".35"/><circle cx="24" cy="6" r="1" fill="#ede0c3"/>
+      <circle cx="16" cy="24" r="1.4" fill="#9f8065" fill-opacity=".3"/><circle cx="31" cy="29" r="1" fill="#f2e4c9"/>
+      <circle cx="7" cy="33" r=".8" fill="#718b7c" fill-opacity=".45"/>
+    </pattern>
+    <pattern id="office" width="30" height="30" patternUnits="userSpaceOnUse">
+      <rect width="30" height="30" fill="#89808e"/>
+      <path d="M0 0H30M0 15H30M0 0V30M15 0V30" stroke="#d5c8bc" stroke-opacity=".08" stroke-width="1"/>
+    </pattern>
+    <linearGradient id="ground" x2="0" y2="1"><stop stop-color="#f1e5ce"/><stop offset="1" stop-color="#ddc7a5"/></linearGradient>
+  </defs>
+  <rect width="1024" height="571" fill="url(#ground)"/>
+  <!-- Shared circulation: oak plank floor -->
+  <path d="M18 24H994V546H18Z" fill="url(#oak)"/>
+  <!-- Room floors, positioned to the app's 1024×571 world coordinates -->
+  <path d="M18 24H275V260H300V295H300V546H18Z" fill="url(#carpet)"/>
+  <path d="M558 24H742V242H558Z" fill="url(#tile)"/>
+  <path d="M742 24H994V242H742Z" fill="url(#office)"/>
+  <path d="M300 295H558V546H300Z" fill="url(#terrazzo)"/>
+  <path d="M558 285H742V546H558Z" fill="url(#tile)"/>
+  <path d="M808 245H994V395H808Z" fill="url(#office)"/>
+  <path d="M742 418H830V546H742Z" fill="url(#tile)"/>
+  <path d="M830 418H994V546H830Z" fill="url(#office)"/>
+
+  <!-- Structural walls; gaps align with live doors and open passages in worldData.js -->
+  <g fill="none" stroke="#493526" stroke-width="7" stroke-linecap="square" stroke-linejoin="round">
+    <path d="M18 24H474 M532 24H994 M18 546H472 M532 546H994 M18 24V546 M994 24V546"/>
+    <path d="M742 24V242 M742 242H772 M806 242H994"/>
+    <path d="M558 24V242 M558 242H620 M654 242H742"/>
+    <path d="M275 24V260 M300 295V546"/>
+    <path d="M300 285H472 M532 285H742"/>
+    <path d="M558 285V546"/>
+    <path d="M808 245H994 M808 395H994 M808 245V275 M808 302V395"/>
+    <path d="M742 418H778 M804 418H875 M903 418H994 M830 418V546"/>
+  </g>
+  <g fill="none" stroke="#c49a6e" stroke-width="1.5" stroke-linecap="square" stroke-linejoin="round" opacity=".85">
+    <path d="M18 20H474 M532 20H994 M18 542H472 M532 542H994 M14 24V546 M998 24V546"/>
+    <path d="M746 28V238 M562 28V238 M279 28V258 M304 299V542 M562 289V542 M812 249H990 M812 391H990 M834 422V542"/>
+  </g>
+
+  <!-- Soft floor highlights make zones read cleanly beneath the interactive objects -->
+  <path d="M32 40H264V50H32ZM570 36H730V44H570ZM754 36H980V44H754Z" fill="#fff5df" opacity=".1"/>
+  <path d="M32 520H286V532H32ZM316 520H542V532H316Z" fill="#fff5df" opacity=".12"/>
+</svg>

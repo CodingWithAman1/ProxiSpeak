@@ -68,7 +68,7 @@ export function SpatialCanvas({
   // Preload the stylized office background map
   useEffect(() => {
     const img = new Image();
-    img.src = '/office_map.jpg';
+    img.src = '/office_map.svg';
     img.onload = () => {
       mapImageRef.current = img;
       setMapImageLoaded(true);
@@ -356,8 +356,9 @@ export function SpatialCanvas({
 
       // --- 2. Subtle Blueprint Wall Boundary Guides (Shows Restricted Paths) ---
       ctx.save();
-      ctx.strokeStyle = 'rgba(56, 189, 248, 0.08)';
-      ctx.lineWidth = 1;
+      // Match the map's inked timber wall outlines rather than adding a neon blueprint.
+      ctx.strokeStyle = 'rgba(61, 43, 31, 0.30)';
+      ctx.lineWidth = 2;
       wallsRef.current.forEach((w) => {
         ctx.beginPath();
         ctx.moveTo(w.start.x, w.start.y);
@@ -423,25 +424,25 @@ export function SpatialCanvas({
           const slideDist = (halfW - 5) * progress;
 
           // Header Mounting Track & Housing
-          ctx.fillStyle = '#1e293b';
+          ctx.fillStyle = '#594638';
           ctx.fillRect(door.x - 2, door.y - 3, door.w + 4, 5);
-          ctx.strokeStyle = '#475569';
+          ctx.strokeStyle = '#94775d';
           ctx.lineWidth = 1;
           ctx.strokeRect(door.x - 2, door.y - 3, door.w + 4, 5);
 
           // Floor Guide Track
-          ctx.fillStyle = '#0f172a';
+          ctx.fillStyle = '#74583f';
           ctx.fillRect(door.x - 2, door.y + door.h - 2, door.w + 4, 4);
 
           // Walkway Threshold Glow (Emerald when opening/open, amber when closed)
           const trackAlpha = 0.25 + progress * 0.45;
-          ctx.fillStyle = progress > 0.4 ? `rgba(16, 185, 129, ${trackAlpha})` : `rgba(245, 158, 11, ${trackAlpha * 0.6})`;
+          ctx.fillStyle = progress > 0.4 ? `rgba(78, 125, 94, ${trackAlpha * 0.58})` : `rgba(151, 111, 65, ${trackAlpha * 0.45})`;
           ctx.fillRect(door.x + 2, door.y + 2, door.w - 4, door.h - 4);
 
           // Autonomous Motion Sensor Puck with Expanding Radar Rings
           const isSensorActive = door.sensorActive;
           const sensorPulse = Math.sin(time * 5) * 0.3 + 0.7;
-          ctx.fillStyle = isSensorActive ? '#10b981' : '#0284c7';
+          ctx.fillStyle = isSensorActive ? '#6b9c72' : '#8aa6a0';
           ctx.beginPath();
           ctx.arc(door.x + halfW, door.y - 3, 3.5, 0, Math.PI * 2);
           ctx.fill();
@@ -459,12 +460,12 @@ export function SpatialCanvas({
           const leftX = door.x - slideDist;
           ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
           ctx.shadowBlur = 6;
-          ctx.fillStyle = 'rgba(56, 189, 248, 0.45)';
+          ctx.fillStyle = 'rgba(133, 187, 190, 0.28)';
           ctx.fillRect(leftX, door.y, halfW, door.h);
           ctx.shadowBlur = 0;
 
           // Panel frame & specular reflection
-          ctx.strokeStyle = progress > 0.5 ? '#38bdf8' : '#0284c7';
+          ctx.strokeStyle = progress > 0.5 ? '#9bb9a1' : '#738f91';
           ctx.lineWidth = 1.5;
           ctx.strokeRect(leftX, door.y, halfW, door.h);
 
@@ -483,11 +484,11 @@ export function SpatialCanvas({
           const rightX = door.x + halfW + slideDist;
           ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
           ctx.shadowBlur = 6;
-          ctx.fillStyle = 'rgba(56, 189, 248, 0.45)';
+          ctx.fillStyle = 'rgba(133, 187, 190, 0.28)';
           ctx.fillRect(rightX, door.y, halfW, door.h);
           ctx.shadowBlur = 0;
 
-          ctx.strokeStyle = progress > 0.5 ? '#38bdf8' : '#0284c7';
+          ctx.strokeStyle = progress > 0.5 ? '#9bb9a1' : '#738f91';
           ctx.lineWidth = 1.5;
           ctx.strokeRect(rightX, door.y, halfW, door.h);
 
@@ -558,7 +559,7 @@ export function SpatialCanvas({
 
           // Blueprint Swing Arc Guideline
           if (progress > 0.05) {
-            ctx.strokeStyle = 'rgba(56, 189, 248, 0.45)';
+            ctx.strokeStyle = 'rgba(145, 111, 75, 0.5)';
             ctx.lineWidth = 1;
             ctx.setLineDash([3, 4]);
             ctx.beginPath();
@@ -571,9 +572,9 @@ export function SpatialCanvas({
 
           // Open Walkway Threshold Highlight
           if (progress > 0.3) {
-            ctx.fillStyle = 'rgba(16, 185, 129, 0.18)';
+            ctx.fillStyle = 'rgba(89, 137, 93, 0.16)';
             ctx.fillRect(door.x, door.y, door.w, door.h);
-            ctx.strokeStyle = 'rgba(16, 185, 129, 0.45)';
+            ctx.strokeStyle = 'rgba(89, 137, 93, 0.48)';
             ctx.lineWidth = 1;
             ctx.setLineDash([2, 3]);
             ctx.strokeRect(door.x, door.y, door.w, door.h);
@@ -581,7 +582,7 @@ export function SpatialCanvas({
           }
 
           // Door Frame Jambs
-          ctx.fillStyle = '#451a03';
+          ctx.fillStyle = '#59402d';
           if (isVertical) {
             ctx.fillRect(door.x - 2, door.y - 2, door.w + 4, 3);
             ctx.fillRect(door.x - 2, door.y + door.h - 1, door.w + 4, 3);
@@ -602,15 +603,15 @@ export function SpatialCanvas({
           ctx.shadowOffsetY = 3;
 
           const woodGrad = ctx.createLinearGradient(0, 0, leafLen, 0);
-          woodGrad.addColorStop(0, '#78350f');
-          woodGrad.addColorStop(0.5, '#92400e');
-          woodGrad.addColorStop(1, '#b45309');
+          woodGrad.addColorStop(0, '#875c3c');
+          woodGrad.addColorStop(0.5, '#a8754c');
+          woodGrad.addColorStop(1, '#c08a5b');
           ctx.fillStyle = woodGrad;
 
           if (isVertical) {
             ctx.fillRect(-leafThick / 2, 0, leafThick, leafLen);
             ctx.shadowBlur = 0;
-            ctx.strokeStyle = '#d97706';
+            ctx.strokeStyle = '#d0a06c';
             ctx.lineWidth = 1;
             ctx.strokeRect(-leafThick / 2, 0, leafThick, leafLen);
 
@@ -622,7 +623,7 @@ export function SpatialCanvas({
           } else {
             ctx.fillRect(0, -leafThick / 2, leafLen, leafThick);
             ctx.shadowBlur = 0;
-            ctx.strokeStyle = '#d97706';
+            ctx.strokeStyle = '#d0a06c';
             ctx.lineWidth = 1;
             ctx.strokeRect(0, -leafThick / 2, leafLen, leafThick);
 
@@ -967,7 +968,7 @@ export function SpatialCanvas({
         ctx.arc(alert.x, alert.y, rippleRad, 0, Math.PI * 2);
         ctx.stroke();
 
-        ctx.fillStyle = `rgba(15, 23, 42, ${alpha * 0.92})`;
+        ctx.fillStyle = `rgba(75, 48, 32, ${alpha * 0.92})`;
         ctx.beginPath();
         const msgW = 160;
         ctx.roundRect(alert.x - msgW / 2, alert.y - 32, msgW, 20, 6);
