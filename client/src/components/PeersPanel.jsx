@@ -60,15 +60,38 @@ export function PeersPanel({
 
       {/* Main Peers List */}
       <div className="flex-1 overflow-y-auto pt-3 space-y-2.5 pr-1 custom-scrollbar">
-        {peers.map((peer) => {
-          const distance = calculateDistance(player, peer);
-          const inRange = distance <= earshotRadius;
-          const isOccluded = checkWallOcclusion(player, peer, walls);
-          const gain = inRange
-            ? calculateProximityGain(distance, earshotRadius, isOccluded)
-            : 0;
-          const pan = calculateStereoPan(player, peer, earshotRadius);
-          const volumePct = Math.round(gain * 100);
+        {(() => {
+          const activeAcousticWalls = [...walls];
+          doors.forEach((door) => {
+            if (!door.isOpen) {
+              const isVertical = door.orientation === 'vertical';
+              if (isVertical) {
+                const midX = door.x + door.w / 2;
+                activeAcousticWalls.push({
+                  id: `wall-closed-${door.id}`,
+                  start: { x: midX, y: door.y },
+                  end: { x: midX, y: door.y + door.h },
+                });
+              } else {
+                const midY = door.y + door.h / 2;
+                activeAcousticWalls.push({
+                  id: `wall-closed-${door.id}`,
+                  start: { x: door.x, y: midY },
+                  end: { x: door.x + door.w, y: midY },
+                });
+              }
+            }
+          });
+
+          return peers.map((peer) => {
+            const distance = calculateDistance(player, peer);
+            const inRange = distance <= earshotRadius;
+            const isOccluded = checkWallOcclusion(player, peer, activeAcousticWalls);
+            const gain = inRange
+              ? calculateProximityGain(distance, earshotRadius, isOccluded)
+              : 0;
+            const pan = calculateStereoPan(player, peer, earshotRadius);
+            const volumePct = Math.round(gain * 100);
 
           return (
             <div
@@ -178,7 +201,8 @@ export function PeersPanel({
               </div>
             </div>
           );
-        })}
+        });
+      })()}
 
         {/* Interactive Office Doors Section */}
         <div className="p-3.5 rounded-xl glass-card space-y-2.5">

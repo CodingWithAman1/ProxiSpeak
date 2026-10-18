@@ -65,10 +65,10 @@ export function SpatialCanvas({
     peersRef.current = peers;
   }, [peers]);
 
-  // Preload the stylized office background map
+  // Preload the stylized modern biophilic office background map
   useEffect(() => {
     const img = new Image();
-    img.src = '/office_map.svg';
+    img.src = '/office_map_modern.jpg';
     img.onload = () => {
       mapImageRef.current = img;
       setMapImageLoaded(true);

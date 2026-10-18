@@ -34,10 +34,10 @@ import {
 import spatialAudio from './utils/spatialAudioEngine';
 
 export function App() {
-  // Player state starts in Central Hallway
+  // Player state starts in Central Corridor Atrium
   const [player, setPlayer] = useState({
-    x: 480,
-    y: 220,
+    x: 505,
+    y: 120,
     name: 'You (Host)',
     id: 'local-player',
     isSeated: false,
@@ -281,7 +281,7 @@ export function App() {
   // Autonomous Colleague Office Activity in Background (Periodic door interactions)
   useEffect(() => {
     const ambientRoutine = setInterval(() => {
-      const candidateDoors = ['door-breakroom', 'door-private'];
+      const candidateDoors = ['door-devhub', 'door-boardroom', 'door-restroom'];
       const chosenId = candidateDoors[Math.floor(Math.random() * candidateDoors.length)];
 
       setDoors((prev) =>
@@ -371,7 +371,7 @@ export function App() {
   // Toggle sit/leave boardroom meeting table
   const handleToggleMeetingTable = useCallback(() => {
     if (player.isSeated) {
-      setPlayer((prev) => ({ ...prev, x: 772, y: 260, isSeated: false }));
+      setPlayer((prev) => ({ ...prev, x: 640, y: 175, isSeated: false }));
     } else {
       const table = furniture.conferenceTable;
       const openChair = table.chairs.find((c) => c.occupant === null) || table.chairs[2];
@@ -398,7 +398,7 @@ export function App() {
 
   // Reset positions
   const handleResetPositions = useCallback(() => {
-    setPlayer({ x: 480, y: 220, name: 'You (Host)', id: 'local-player', isSeated: false });
+    setPlayer({ x: 505, y: 120, name: 'You (Host)', id: 'local-player', isSeated: false });
     setPeers(INITIAL_PEERS);
   }, []);
 
