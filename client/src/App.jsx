@@ -9,12 +9,16 @@ import {
   TreePine,
   DoorOpen,
   Droplets,
+  Wifi,
+  WifiOff,
 } from 'lucide-react';
 import SpatialCanvas from './components/SpatialCanvas';
 import AudioHUD from './components/AudioHUD';
 import PeersPanel from './components/PeersPanel';
 import RoomNavigator from './components/RoomNavigator';
 import SOPGuidanceModal from './components/SOPGuidanceModal';
+import socketService from './services/socketService';
+import webrtcMesh from './services/webrtcMesh';
 import {
   WORLD_CONFIG,
   INITIAL_ROOMS,
@@ -30,6 +34,7 @@ import {
   calculateStereoPan,
   calculateProximityGain,
   checkWallOcclusion,
+  getContainingRoom,
 } from './utils/spatialGeometry';
 import spatialAudio from './utils/spatialAudioEngine';
 
@@ -39,7 +44,7 @@ export function App() {
     x: 505,
     y: 120,
     name: 'You (Host)',
-    id: 'local-player',
+    id: `user-${Math.random().toString(36).substring(2, 8)}`,
     isSeated: false,
   });
 
@@ -52,6 +57,10 @@ export function App() {
   const [plants] = useState(INITIAL_PLANTS);
   const [furniture, setFurniture] = useState(OFFICE_FURNITURE);
 
+  // Real-time backend connection status
+  const [isServerOnline, setIsServerOnline] = useState(false);
+  const [socketId, setSocketId] = useState(null);
+
   // Audio & HUD controls
   const [isMuted, setIsMuted] = useState(false);
   const [isDeafened, setIsDeafened] = useState(false);
@@ -61,6 +70,111 @@ export function App() {
   const [isSOPModalOpen, setIsSOPModalOpen] = useState(false);
 
   const earshotRadius = WORLD_CONFIG.earshotPresets[earshotPreset].radius;
+
+  // Real-time Socket.io & WebRTC Presence Gateway Lifecycle
+  useEffect(() => {
+    const socket = socketService.connect(
+      {
+        userId: player.id,
+        name: player.name,
+        color: '#06b6d4',
+        x: player.x,
+        y: player.y,
+        currentRoom: 'corridor',
+        isMuted,
+        isDeafened,
+        earshotRadius,
+      },
+      {
+        onConnectionChange: (online, id) => {
+          setIsServerOnline(online);
+          setSocketId(id);
+        },
+        onInitialSync: (data) => {
+          if (data.doors && data.doors.length) {
+            setDoors((prev) =>
+              prev.map((d) => {
+                const remote = data.doors.find((rd) => rd.id === d.id);
+                return remote ? { ...d, isOpen: remote.isOpen, targetOpen: remote.isOpen ? 1 : 0 } : d;
+              })
+            );
+          }
+        },
+        onUserJoined: (newUser) => {
+          setPeers((prev) => {
+            if (prev.some((p) => p.id === newUser.userId)) return prev;
+            return [
+              ...prev,
+              {
+                id: newUser.userId,
+                name: newUser.name,
+                handle: `@${newUser.name.toLowerCase().replace(/\s+/g, '.')}`,
+                role: 'Online Colleague',
+                statusTag: 'In Office 🟢',
+                x: newUser.x,
+                y: newUser.y,
+                color: newUser.color || '#38bdf8',
+                earshotRadius: newUser.earshotRadius || 150,
+                isMuted: newUser.isMuted,
+                isSpeaking: newUser.isSpeaking,
+                speechCycle: 0,
+                isSeated: newUser.isSeated,
+                wanderTarget: { x: newUser.x, y: newUser.y },
+              },
+            ];
+          });
+        },
+        onUserMoved: ({ userId, x, y }) => {
+          setPeers((prev) =>
+            prev.map((p) => (p.id === userId ? { ...p, x, y, wanderTarget: { x, y } } : p))
+          );
+        },
+        onUserLeft: ({ userId }) => {
+          setPeers((prev) => prev.filter((p) => p.id !== userId));
+          webrtcMesh.closePeer(userId);
+        },
+        onDoorUpdated: (updatedDoor) => {
+          setDoors((prev) =>
+            prev.map((d) => (d.id === updatedDoor.id ? { ...d, isOpen: updatedDoor.isOpen, targetOpen: updatedDoor.isOpen ? 1 : 0 } : d))
+          );
+        },
+        onProximityUpdate: ({ neighbors }) => {
+          neighbors.forEach((n) => {
+            webrtcMesh.updateSpatialAudio(n.socketId, {
+              gain: n.gain,
+              pan: n.pan,
+              isOccluded: n.isOccluded,
+            });
+          });
+        },
+      }
+    );
+
+    if (socket) {
+      webrtcMesh.init(socket, spatialAudio.ctx);
+    }
+
+    return () => {
+      socketService.disconnect();
+    };
+  }, []);
+
+  // Broadcast player movements to server in real-time
+  useEffect(() => {
+    const currentRoom = getContainingRoom(player, rooms);
+    socketService.sendMovement(player.x, player.y, currentRoom ? currentRoom.id : 'corridor');
+  }, [player.x, player.y, player.isSeated, rooms]);
+
+  // Sync mute state to server and WebRTC tracks
+  useEffect(() => {
+    socketService.sendAudioState({
+      isMuted,
+      isDeafened,
+      isSpeaking: micDecibels > 0.05,
+      isSeated: player.isSeated,
+    });
+    webrtcMesh.setMicMuted(isMuted);
+  }, [isMuted, isDeafened, micDecibels, player.isSeated]);
 
   // Sync audio engine settings
   useEffect(() => {
@@ -179,6 +293,7 @@ export function App() {
           } else {
             spatialAudio.playDoorSound(nextOpen, pan);
           }
+          socketService.toggleDoor(doorId, nextOpen);
           return {
             ...door,
             isOpen: nextOpen,
@@ -203,6 +318,7 @@ export function App() {
           } else {
             spatialAudio.playDoorSound(isOpen, pan);
           }
+          socketService.toggleDoor(doorId, isOpen);
           return {
             ...door,
             isOpen,
@@ -464,6 +580,19 @@ export function App() {
 
         {/* Status Indicators */}
         <div className="flex items-center gap-2">
+          <div
+            className={`flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-semibold border transition-all ${
+              isServerOnline
+                ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300 shadow-sm shadow-emerald-500/10'
+                : 'bg-amber-500/15 border-amber-500/30 text-amber-300 animate-pulse'
+            }`}
+          >
+            {isServerOnline ? <Wifi size={13} className="text-emerald-400" /> : <WifiOff size={13} className="text-amber-400" />}
+            <span className="font-mono text-[11px]">
+              {isServerOnline ? 'Live Mesh: Connected' : 'Mesh: Offline (Local Mode)'}
+            </span>
+          </div>
+
           {player.isSeated && (
             <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-purple-500/15 border border-purple-500/30 text-xs text-purple-300 font-semibold animate-pulse">
               <Users size={13} />

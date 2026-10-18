@@ -58,7 +58,21 @@ export const config = Object.freeze({
      * any origin may call the API; once the React client exists this locks
      * down to the listed origins.
      */
-    clientOrigins: list('CLIENT_URL', ''),
+    clientOrigins: list('CLIENT_URL', 'http://localhost:5173,http://127.0.0.1:5173'),
+  }),
+
+  db: Object.freeze({
+    uri: str('MONGODB_URI', 'mongodb://localhost:27017/proxispeak'),
+  }),
+
+  spatial: Object.freeze({
+    defaultEarshotRadius: num('DEFAULT_EARSHOT_RADIUS', 150),
+    worldWidth: 1024,
+    worldHeight: 571,
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+    ],
   }),
 });
 

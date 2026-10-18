@@ -7,16 +7,26 @@ import process from 'node:process';
 import config from './config/index.js';
 import logger from './utils/logger.js';
 import { createApp } from './app.js';
+import { connectDB } from './db/index.js';
+import { setupSocketGateway } from './socket/index.js';
 
 const log = logger;
 
+// 1. Connect to Database (with resilient in-memory fallback)
+await connectDB();
+
+// 2. Create HTTP server & attach Express app
 const httpServer = http.createServer();
 const app = createApp({ config, logger: log });
 httpServer.on('request', app);
 
+// 3. Attach real-time Socket.io & WebRTC gateway
+const io = setupSocketGateway(httpServer, config);
+
 httpServer.listen(config.server.port, config.server.host, () => {
   log.info(`ProxiSpeak server listening on ${config.server.host}:${config.server.port} (${config.nodeEnv})`);
-  log.info('Health:  GET /health');
+  log.info('Health:   GET /health');
+  log.info('Realtime: Socket.io & WebRTC Voice Mesh ready on port ' + config.server.port);
 });
 
 let shuttingDown = false;

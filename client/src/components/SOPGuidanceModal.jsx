@@ -59,29 +59,29 @@ export function SOPGuidanceModal({ isOpen, onClose }) {
                 </p>
               </div>
 
-              <div className="p-3 rounded-xl bg-slate-800/40 border border-slate-700/60">
-                <div className="flex items-center justify-between font-semibold text-slate-200">
+              <div className="p-3 rounded-xl bg-cyan-500/10 border border-cyan-500/30">
+                <div className="flex items-center justify-between font-semibold text-cyan-200">
                   <span className="flex items-center gap-2">
-                    <span className="w-5 h-5 rounded-full bg-slate-700 text-slate-300 text-xs flex items-center justify-center font-bold">2</span>
+                    <span className="w-5 h-5 rounded-full bg-cyan-500 text-slate-950 text-xs flex items-center justify-center font-bold">2</span>
                     Step 2: Backend Foundations & Geospatial Data Layer
                   </span>
-                  <span className="text-[11px] font-mono text-slate-400">Next Step</span>
+                  <span className="text-[11px] font-mono bg-cyan-500/20 px-2 py-0.5 rounded text-cyan-300">Completed</span>
                 </div>
-                <p className="text-xs text-slate-400 mt-1.5 ml-7">
-                  Express app, MongoDB connection, 2dsphere indexes for rooms and presence, seed scripts, and REST health endpoints.
+                <p className="text-xs text-slate-300 mt-1.5 ml-7">
+                  Express app, MongoDB connection with resilient in-memory fallback, 2dsphere indexes for rooms and presence, health check, and spatial calculation modules.
                 </p>
               </div>
 
-              <div className="p-3 rounded-xl bg-slate-800/40 border border-slate-700/60">
-                <div className="flex items-center justify-between font-semibold text-slate-200">
+              <div className="p-3 rounded-xl bg-cyan-500/10 border border-cyan-500/30">
+                <div className="flex items-center justify-between font-semibold text-cyan-200">
                   <span className="flex items-center gap-2">
-                    <span className="w-5 h-5 rounded-full bg-slate-700 text-slate-300 text-xs flex items-center justify-center font-bold">3</span>
-                    Step 3: Real-Time Presence & Proximity Engine
+                    <span className="w-5 h-5 rounded-full bg-cyan-500 text-slate-950 text-xs flex items-center justify-center font-bold">3</span>
+                    Step 3: Real-Time Presence & WebRTC Signaling Mesh
                   </span>
-                  <span className="text-[11px] font-mono text-slate-400">Upcoming</span>
+                  <span className="text-[11px] font-mono bg-cyan-500/20 px-2 py-0.5 rounded text-cyan-300">Completed</span>
                 </div>
-                <p className="text-xs text-slate-400 mt-1.5 ml-7">
-                  Socket.io gateway, presence lifecycle, client position broadcasts, and spatial queries.
+                <p className="text-xs text-slate-300 mt-1.5 ml-7">
+                  Socket.io gateway, presence lifecycle, client position broadcasts, line-intersection wall occlusion, WebRTC offer/answer/ICE relay mesh, and Web Audio API spatial filters.
                 </p>
               </div>
 
@@ -89,12 +89,12 @@ export function SOPGuidanceModal({ isOpen, onClose }) {
                 <div className="flex items-center justify-between font-semibold text-slate-200">
                   <span className="flex items-center gap-2">
                     <span className="w-5 h-5 rounded-full bg-slate-700 text-slate-300 text-xs flex items-center justify-center font-bold">4</span>
-                    Step 4: WebRTC Voice Mesh & Spatial Audio Engine
+                    Step 4: Advanced Audio Filters & Room Isolation
                   </span>
-                  <span className="text-[11px] font-mono text-slate-400">Upcoming</span>
+                  <span className="text-[11px] font-mono text-slate-400">Next Step</span>
                 </div>
                 <p className="text-xs text-slate-400 mt-1.5 ml-7">
-                  Peer connections, WebRTC signaling mesh, Web Audio API distance crossfade, and wall occlusion filter.
+                  Room acoustic reverberation simulation, binaural HRTF panning, microphone noise suppression, and active speaker visualizer ring.
                 </p>
               </div>
 
