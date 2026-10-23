@@ -5,7 +5,7 @@ import {
   CloudRain,
   Coffee,
   Users,
-  FileCheck2,
+  Compass,
   TreePine,
   DoorOpen,
   Droplets,
@@ -16,7 +16,7 @@ import SpatialCanvas from './components/SpatialCanvas';
 import AudioHUD from './components/AudioHUD';
 import PeersPanel from './components/PeersPanel';
 import RoomNavigator from './components/RoomNavigator';
-import SOPGuidanceModal from './components/SOPGuidanceModal';
+import SystemGuideModal from './components/SystemGuideModal';
 import socketService from './services/socketService';
 import webrtcMesh from './services/webrtcMesh';
 import {
@@ -67,7 +67,7 @@ export function App() {
   const [earshotPreset, setEarshotPreset] = useState('normal');
   const [ambientSoundEnabled, setAmbientSoundEnabled] = useState(true);
   const [micDecibels, setMicDecibels] = useState(0.2);
-  const [isSOPModalOpen, setIsSOPModalOpen] = useState(false);
+  const [isGuideModalOpen, setIsGuideModalOpen] = useState(false);
 
   const earshotRadius = WORLD_CONFIG.earshotPresets[earshotPreset].radius;
 
@@ -608,11 +608,11 @@ export function App() {
           </div>
 
           <button
-            onClick={() => setIsSOPModalOpen(true)}
+            onClick={() => setIsGuideModalOpen(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-slate-950 font-bold text-xs transition-all shadow-md shadow-cyan-500/20 cursor-pointer"
           >
-            <FileCheck2 size={13} />
-            <span>SOP Checklist</span>
+            <Compass size={13} />
+            <span>System Guide</span>
           </button>
         </div>
       </header>
@@ -690,15 +690,15 @@ export function App() {
           onResetPositions={handleResetPositions}
           onTestAudioBeep={handleTestAudioBeep}
           micDecibels={micDecibels}
-          onOpenSOPModal={() => setIsSOPModalOpen(true)}
+          onOpenGuideModal={() => setIsGuideModalOpen(true)}
           isSeated={player.isSeated}
         />
       </footer>
 
-      {/* Infotact SOP Guidelines & Roadmap Modal */}
-      <SOPGuidanceModal
-        isOpen={isSOPModalOpen}
-        onClose={() => setIsSOPModalOpen(false)}
+      {/* ProxiSpeak System Architecture & Audio Guide Modal */}
+      <SystemGuideModal
+        isOpen={isGuideModalOpen}
+        onClose={() => setIsGuideModalOpen(false)}
       />
     </div>
   );

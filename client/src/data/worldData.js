@@ -323,7 +323,7 @@ export const OFFICE_FURNITURE = {
       'Architecture: WebRTC P2P + Proximity Gain',
       'Acoustics: Low-Pass 450Hz Occlusion Through Closed Doors',
       'Biophilic Workspace: High-Res Vector Mapping & Path Physics',
-      'Infotact SOP Compliance: Verified Build',
+      'Production System: Verified Enterprise Architecture',
     ],
   },
   coffeeMachine: {

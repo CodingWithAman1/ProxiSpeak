@@ -11,7 +11,7 @@ import {
   CloudRain,
   Users,
   RotateCcw,
-  FileText,
+  Compass,
 } from 'lucide-react';
 import { WORLD_CONFIG } from '../data/worldData';
 
@@ -29,7 +29,7 @@ export function AudioHUD({
   onResetPositions,
   onTestAudioBeep,
   micDecibels,
-  onOpenSOPModal,
+  onOpenGuideModal,
   isSeated,
 }) {
   return (
@@ -159,12 +159,12 @@ export function AudioHUD({
         </button>
 
         <button
-          onClick={onOpenSOPModal}
+          onClick={onOpenGuideModal}
           className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl glass-card text-slate-300 hover:text-white text-xs font-semibold transition-all cursor-pointer"
-          title="View Infotact SOP Guidelines & Review Milestones"
+          title="View System Architecture & Audio Blueprint"
         >
-          <FileText size={14} />
-          <span>SOP v1.1</span>
+          <Compass size={14} className="text-cyan-400" />
+          <span>System Specs</span>
         </button>
       </div>
     </div>
