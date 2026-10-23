@@ -1,48 +1,16 @@
+/**
+ * Real-time Socket.io Gateway for ProxiSpeak
+ * Handles presence tracking, 60fps spatial updates, earshot diffs,
+ * WebRTC voice mesh signaling, and simulation bots.
+ */
 import { Server } from 'socket.io';
+import config from '../config/index.js';
 import logger from '../utils/logger.js';
-import { presenceStore } from '../db/index.js';
-import { getNeighborsForUser } from '../services/spatialEngine.js';
-import { setupWebRTCSignaling, syncMeshConnections } from './webrtc.js';
+import { spatialStore, computeSpatialAudioProfile } from '../services/spatialEngine.js';
+import { DEFAULT_ROOMS } from '../seed/seedData.js';
+import UserPresence from '../models/UserPresence.js';
 
-// Synchronized World State: Doors, Windows, Conference Seats
-const initialDoorStates = [
-  { id: 'door-top-entrance', isOpen: false, type: 'glass_double', orientation: 'horizontal' },
-  { id: 'door-center-glass', isOpen: true, type: 'glass_double', orientation: 'horizontal' },
-  { id: 'door-south-entrance', isOpen: false, type: 'glass_double', orientation: 'horizontal' },
-  { id: 'door-boardroom', isOpen: false, type: 'wood_single', orientation: 'horizontal' },
-  { id: 'door-devhub', isOpen: true, type: 'wood_single', orientation: 'vertical' },
-  { id: 'door-focus-1', isOpen: false, type: 'wood_single', orientation: 'vertical' },
-  { id: 'door-focus-2', isOpen: false, type: 'wood_single', orientation: 'vertical' },
-  { id: 'door-restroom', isOpen: false, type: 'wood_single', orientation: 'horizontal' },
-];
-
-let liveDoors = [...initialDoorStates];
-
-// Static walls for occlusion calculation
-const officeWalls = [
-  { id: 'w-top-1', start: { x: 18, y: 16 }, end: { x: 468, y: 16 } },
-  { id: 'w-top-2', start: { x: 544, y: 16 }, end: { x: 1000, y: 16 } },
-  { id: 'w-bot-1', start: { x: 18, y: 552 }, end: { x: 472, y: 552 } },
-  { id: 'w-bot-2', start: { x: 538, y: 552 }, end: { x: 1000, y: 552 } },
-  { id: 'w-left', start: { x: 18, y: 16 }, end: { x: 18, y: 552 } },
-  { id: 'w-right', start: { x: 1000, y: 16 }, end: { x: 1000, y: 552 } },
-  { id: 'w-dev-e1', start: { x: 436, y: 16 }, end: { x: 436, y: 172 } },
-  { id: 'w-dev-e2', start: { x: 436, y: 204 }, end: { x: 436, y: 365 } },
-  { id: 'w-dev-e3', start: { x: 410, y: 365 }, end: { x: 410, y: 552 } },
-  { id: 'w-corr-e1', start: { x: 577, y: 16 }, end: { x: 577, y: 185 } },
-  { id: 'w-corr-e2', start: { x: 577, y: 205 }, end: { x: 577, y: 365 } },
-  { id: 'w-br-s', start: { x: 619, y: 205 }, end: { x: 1000, y: 205 } },
-  { id: 'w-rec-n1', start: { x: 410, y: 365 }, end: { x: 472, y: 365 } },
-  { id: 'w-rec-n2', start: { x: 538, y: 365 }, end: { x: 577, y: 365 } },
-  { id: 'w-pod-w1', start: { x: 852, y: 205 }, end: { x: 852, y: 228 } },
-  { id: 'w-pod-w2', start: { x: 852, y: 262 }, end: { x: 852, y: 334 } },
-  { id: 'w-pod-w3', start: { x: 852, y: 368 }, end: { x: 852, y: 440 } },
-  { id: 'w-pod-div', start: { x: 852, y: 320 }, end: { x: 1000, y: 320 } },
-  { id: 'w-rest-n1', start: { x: 870, y: 440 }, end: { x: 880, y: 440 } },
-  { id: 'w-rest-n2', start: { x: 912, y: 440 }, end: { x: 1000, y: 440 } },
-];
-
-export function setupSocketGateway(httpServer, config) {
+export function setupSocketGateway(httpServer) {
   const io = new Server(httpServer, {
     cors: {
       origin: config.server.clientOrigins.length ? config.server.clientOrigins : true,
@@ -52,133 +20,388 @@ export function setupSocketGateway(httpServer, config) {
     transports: ['websocket', 'polling'],
   });
 
+  // Track active peer earshot graph: socketId -> Set(peerUserId)
+  const peerAudibilityMap = new Map();
+  // Track active bot timers per room: roomId -> Array(timerIds)
+  const botTimers = new Map();
+
   io.on('connection', (socket) => {
-    logger.info(`Socket connected: ${socket.id} (${socket.handshake.address})`);
+    let currentRoomId = null;
+    let currentUserId = null;
+    peerAudibilityMap.set(socket.id, new Set());
 
-    // Setup WebRTC signaling relay for this socket
-    setupWebRTCSignaling(io, socket);
+    logger.debug(`Socket connected: ${socket.id}`);
 
-    // 1. User joins the spatial workspace
-    socket.on('user:join', async (userData) => {
-      const user = {
-        userId: userData.userId || `user-${socket.id.slice(0, 6)}`,
-        name: userData.name || 'Anonymous Peer',
-        color: userData.color || '#06b6d4',
-        x: userData.x ?? 505,
-        y: userData.y ?? 120,
-        currentRoom: userData.currentRoom || 'corridor',
-        isMuted: !!userData.isMuted,
-        isDeafened: !!userData.isDeafened,
-        isSpeaking: !!userData.isSpeaking,
-        isSeated: !!userData.isSeated,
-        earshotRadius: userData.earshotRadius || 150,
+    /**
+     * User joins a spatial room
+     */
+    socket.on('presence:join', async (data) => {
+      const { roomId = 'central-plaza', user = {} } = data;
+      currentRoomId = roomId;
+      currentUserId = user.userId || `usr_${socket.id.slice(0, 6)}`;
+
+      socket.join(roomId);
+
+      // Find room spawn coordinates
+      const roomDef = DEFAULT_ROOMS.find((r) => r.slug === roomId) || DEFAULT_ROOMS[0];
+      const initialX = user.x ?? roomDef.spawnPoint.x;
+      const initialY = user.y ?? roomDef.spawnPoint.y;
+
+      const presence = {
+        userId: currentUserId,
         socketId: socket.id,
+        roomId,
+        name: user.name || `User ${socket.id.slice(0, 4)}`,
+        avatar: user.avatar || 'avatar-1',
+        color: user.color || '#3b82f6',
+        x: initialX,
+        y: initialY,
+        orientation: 0,
+        isSpeaking: false,
+        isMuted: false,
+        isDeafened: false,
+        earshotRadius: user.earshotRadius || roomDef.earshotDefault || config.spatial.defaultEarshotRadius,
       };
 
-      await presenceStore.saveUser(user);
-      logger.info(`User joined presence: ${user.name} (${user.userId}) at [${user.x}, ${user.y}]`);
+      spatialStore.setUser(roomId, presence);
 
-      // Send initial workspace synchronization back to the user
-      const allUsers = await presenceStore.getAllUsers();
-      socket.emit('sync:initial_state', {
-        self: user,
-        peers: allUsers.filter((u) => u.userId !== user.userId),
-        doors: liveDoors,
-      });
-
-      // Broadcast user:joined to all other clients
-      socket.broadcast.emit('user:joined', user);
-
-      // Compute initial proximity for this user
-      const neighbors = getNeighborsForUser(user, allUsers, officeWalls, liveDoors);
-      socket.emit('proximity:update', { neighbors });
-      syncMeshConnections(socket, user, neighbors, io);
-    });
-
-    // 2. Real-time avatar movement
-    socket.on('user:move', async ({ x, y, currentRoom }) => {
-      const existing = await presenceStore.getUserBySocketId(socket.id);
-      if (!existing) return;
-
-      const updated = {
-        userId: existing.userId,
-        name: existing.name,
-        color: existing.color,
-        x,
-        y,
-        currentRoom: currentRoom || existing.currentRoom || 'corridor',
-        isMuted: existing.isMuted,
-        isDeafened: existing.isDeafened,
-        isSpeaking: existing.isSpeaking,
-        isSeated: existing.isSeated,
-        earshotRadius: existing.earshotRadius || 150,
-        socketId: socket.id,
-      };
-
-      await presenceStore.saveUser(updated);
-
-      // Broadcast lightweight movement delta to peers
-      socket.broadcast.emit('user:moved', {
-        userId: updated.userId,
-        socketId: socket.id,
-        x,
-        y,
-        currentRoom: updated.currentRoom,
-      });
-
-      // Compute and emit proximity updates
-      const allUsers = await presenceStore.getAllUsers();
-      const neighbors = getNeighborsForUser(updated, allUsers, officeWalls, liveDoors);
-      socket.emit('proximity:update', { neighbors });
-
-      // Dynamically trigger WebRTC voice mesh connections based on proximity
-      syncMeshConnections(socket, updated, neighbors, io);
-    });
-
-    // 3. User audio & mic state changes (mute, deafen, speaking)
-    socket.on('user:state', async (stateUpdate) => {
-      const existing = await presenceStore.getUserBySocketId(socket.id);
-      if (!existing) return;
-
-      const updated = {
-        ...existing,
-        ...stateUpdate,
-        userId: existing.userId,
-        socketId: socket.id,
-      };
-
-      await presenceStore.saveUser(updated);
-      socket.broadcast.emit('user:state_changed', {
-        userId: existing.userId,
-        socketId: socket.id,
-        ...stateUpdate,
-      });
-    });
-
-    // 4. Synchronized door interactions
-    socket.on('door:toggle', ({ doorId, isOpen }) => {
-      liveDoors = liveDoors.map((door) => {
-        if (door.id === doorId) {
-          const nextState = isOpen !== undefined ? isOpen : !door.isOpen;
-          return { ...door, isOpen: nextState };
+      // Persist to MongoDB if available
+      try {
+        if (UserPresence.db && UserPresence.db.readyState === 1) {
+          await UserPresence.findOneAndUpdate(
+            { userId: currentUserId },
+            {
+              ...presence,
+              location: { type: 'Point', coordinates: [initialX, initialY] },
+            },
+            { upsert: true }
+          );
         }
-        return door;
+      } catch (err) {
+        // In-memory fallback
+      }
+
+      const allUsers = spatialStore.getAllUsers(roomId);
+      const roomWalls = spatialStore.getRoomWalls(roomId);
+
+      // Notify current user with initial state
+      socket.emit('presence:init', {
+        self: presence,
+        room: roomDef,
+        users: allUsers.filter((u) => u.userId !== currentUserId),
+        walls: roomWalls,
       });
 
-      const updatedDoor = liveDoors.find((d) => d.id === doorId);
-      io.emit('door:updated', updatedDoor);
-      logger.info(`Door state synced: ${doorId} -> ${updatedDoor?.isOpen ? 'OPEN' : 'CLOSED'}`);
+      // Broadcast new user to all other room members
+      socket.to(roomId).emit('presence:joined', presence);
+
+      logger.info(`User ${presence.name} (${currentUserId}) joined room "${roomId}"`);
     });
 
-    // 5. Clean up on disconnect
-    socket.on('disconnect', async () => {
-      const removed = await presenceStore.removeUserBySocketId(socket.id);
+    /**
+     * User movement tick: computes earshot diffs and triggers WebRTC renegotiations
+     */
+    socket.on('presence:move', (coords) => {
+      if (!currentRoomId || !currentUserId) return;
+
+      const user = spatialStore.getUser(currentRoomId, currentUserId);
+      if (!user) return;
+
+      user.x = coords.x;
+      user.y = coords.y;
+      if (typeof coords.orientation === 'number') {
+        user.orientation = coords.orientation;
+      }
+      spatialStore.setUser(currentRoomId, user);
+
+      // Broadcast position to all peers in room for visual canvas rendering
+      socket.to(currentRoomId).emit('presence:moved', {
+        userId: currentUserId,
+        x: user.x,
+        y: user.y,
+        orientation: user.orientation,
+      });
+
+      // Compute earshot diffs against all other peers
+      const peers = spatialStore.getAllUsers(currentRoomId);
+      const walls = spatialStore.getRoomWalls(currentRoomId);
+      const audibleSet = peerAudibilityMap.get(socket.id) || new Set();
+
+      for (const peer of peers) {
+        if (peer.userId === currentUserId) continue;
+
+        // Acoustic profile as listener
+        const profile = computeSpatialAudioProfile(user, peer, walls);
+        const wasAudible = audibleSet.has(peer.userId);
+
+        if (profile.inEarshot && !wasAudible) {
+          audibleSet.add(peer.userId);
+          // Entered earshot: initiate WebRTC audio connection
+          socket.emit('proximity:enter', {
+            peerId: peer.userId,
+            peerSocketId: peer.socketId,
+            peerName: peer.name,
+            profile,
+          });
+
+          // Also notify peer of our entry
+          const reverseProfile = computeSpatialAudioProfile(peer, user, walls);
+          io.to(peer.socketId).emit('proximity:enter', {
+            peerId: user.userId,
+            peerSocketId: socket.id,
+            peerName: user.name,
+            profile: reverseProfile,
+          });
+        } else if (!profile.inEarshot && wasAudible) {
+          audibleSet.delete(peer.userId);
+          // Exited earshot: crossfade out and tear down WebRTC audio connection
+          socket.emit('proximity:exit', { peerId: peer.userId });
+          io.to(peer.socketId).emit('proximity:exit', { peerId: user.userId });
+        } else if (profile.inEarshot && wasAudible) {
+          // Still in earshot: update volume gain, stereo pan, and wall occlusion
+          socket.emit('proximity:update', {
+            peerId: peer.userId,
+            profile,
+          });
+
+          const reverseProfile = computeSpatialAudioProfile(peer, user, walls);
+          io.to(peer.socketId).emit('proximity:update', {
+            peerId: user.userId,
+            profile: reverseProfile,
+          });
+        }
+      }
+    });
+
+    /**
+     * User state changed (mic muted, speaking, deafened)
+     */
+    socket.on('presence:state', (state) => {
+      if (!currentRoomId || !currentUserId) return;
+
+      const user = spatialStore.getUser(currentRoomId, currentUserId);
+      if (!user) return;
+
+      if (typeof state.isSpeaking === 'boolean') user.isSpeaking = state.isSpeaking;
+      if (typeof state.isMuted === 'boolean') user.isMuted = state.isMuted;
+      if (typeof state.isDeafened === 'boolean') user.isDeafened = state.isDeafened;
+      if (typeof state.earshotRadius === 'number') user.earshotRadius = state.earshotRadius;
+
+      spatialStore.setUser(currentRoomId, user);
+
+      socket.to(currentRoomId).emit('presence:state-changed', {
+        userId: currentUserId,
+        isSpeaking: user.isSpeaking,
+        isMuted: user.isMuted,
+        isDeafened: user.isDeafened,
+        earshotRadius: user.earshotRadius,
+      });
+    });
+
+    /**
+     * WebRTC Signaling: Offer
+     */
+    socket.on('signal:offer', ({ toSocketId, toUserId, offer }) => {
+      io.to(toSocketId).emit('signal:offer', {
+        fromSocketId: socket.id,
+        fromUserId: currentUserId,
+        offer,
+      });
+    });
+
+    /**
+     * WebRTC Signaling: Answer
+     */
+    socket.on('signal:answer', ({ toSocketId, toUserId, answer }) => {
+      io.to(toSocketId).emit('signal:answer', {
+        fromSocketId: socket.id,
+        fromUserId: currentUserId,
+        answer,
+      });
+    });
+
+    /**
+     * WebRTC Signaling: ICE Candidate
+     */
+    socket.on('signal:ice-candidate', ({ toSocketId, toUserId, candidate }) => {
+      io.to(toSocketId).emit('signal:ice-candidate', {
+        fromSocketId: socket.id,
+        fromUserId: currentUserId,
+        candidate,
+      });
+    });
+
+    /**
+     * Spatial Text Chat (Room Broadcast or Earshot Whisper)
+     */
+    socket.on('chat:send', ({ text, isWhisper = false }) => {
+      if (!currentRoomId || !currentUserId || !text?.trim()) return;
+
+      const sender = spatialStore.getUser(currentRoomId, currentUserId);
+      if (!sender) return;
+
+      const messageObj = {
+        id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        senderId: currentUserId,
+        senderName: sender.name,
+        senderColor: sender.color,
+        text: text.trim(),
+        isWhisper,
+        timestamp: new Date().toISOString(),
+      };
+
+      if (!isWhisper) {
+        // Room broadcast
+        io.to(currentRoomId).emit('chat:message', messageObj);
+      } else {
+        // Earshot whisper: only send to sender and users within audible radius
+        socket.emit('chat:message', messageObj);
+        const peers = spatialStore.getAllUsers(currentRoomId);
+        const walls = spatialStore.getRoomWalls(currentRoomId);
+
+        for (const peer of peers) {
+          if (peer.userId === currentUserId) continue;
+          const profile = computeSpatialAudioProfile(peer, sender, walls);
+          if (profile.inEarshot) {
+            io.to(peer.socketId).emit('chat:message', messageObj);
+          }
+        }
+      }
+    });
+
+    /**
+     * Simulation: Spawn automated testing bots
+     */
+    socket.on('simulation:spawn', ({ count = 2 }) => {
+      if (!currentRoomId) return;
+
+      const roomDef = DEFAULT_ROOMS.find((r) => r.slug === currentRoomId) || DEFAULT_ROOMS[0];
+      const botNames = ['Bot Maya (Designer)', 'Bot Liam (Engineer)', 'Bot Sarah (Product)', 'Bot David (DevOps)'];
+      const botColors = ['#ec4899', '#10b981', '#f59e0b', '#8b5cf6'];
+
+      const spawnedBots = [];
+
+      for (let i = 0; i < Math.min(count, 4); i++) {
+        const botId = `bot_${Date.now()}_${i}`;
+        const spawnX = Math.max(10, Math.min(roomDef.dimensions.width - 10, roomDef.spawnPoint.x + (i + 1) * 8 - 12));
+        const spawnY = Math.max(10, Math.min(roomDef.dimensions.height - 10, roomDef.spawnPoint.y + ((i % 2 === 0 ? 1 : -1) * 6)));
+
+        const botUser = {
+          userId: botId,
+          socketId: `socket_${botId}`,
+          roomId: currentRoomId,
+          name: botNames[i % botNames.length],
+          avatar: `bot-${i + 1}`,
+          color: botColors[i % botColors.length],
+          x: spawnX,
+          y: spawnY,
+          orientation: 0,
+          isSpeaking: false,
+          isMuted: false,
+          isDeafened: false,
+          isBot: true,
+          earshotRadius: roomDef.earshotDefault || config.spatial.defaultEarshotRadius,
+        };
+
+        spatialStore.setUser(currentRoomId, botUser);
+        io.to(currentRoomId).emit('presence:joined', botUser);
+        spawnedBots.push(botUser);
+      }
+
+      // Start autonomous wandering & speaking simulation
+      const intervalId = setInterval(() => {
+        const users = spatialStore.getAllUsers(currentRoomId);
+        const activeBots = users.filter((u) => u.isBot);
+
+        if (activeBots.length === 0) {
+          clearInterval(intervalId);
+          return;
+        }
+
+        for (const bot of activeBots) {
+          // Autonomous wander with boundary collision avoidance
+          const angle = Math.random() * Math.PI * 2;
+          const speed = 1.2 + Math.random() * 1.5;
+          const newX = Math.max(8, Math.min(roomDef.dimensions.width - 8, bot.x + Math.cos(angle) * speed));
+          const newY = Math.max(8, Math.min(roomDef.dimensions.height - 8, bot.y + Math.sin(angle) * speed));
+
+          bot.x = Math.round(newX * 10) / 10;
+          bot.y = Math.round(newY * 10) / 10;
+          bot.orientation = angle;
+
+          // Toggle occasional voice activity simulation
+          if (Math.random() > 0.65) {
+            bot.isSpeaking = !bot.isSpeaking;
+          }
+
+          spatialStore.setUser(currentRoomId, bot);
+
+          io.to(currentRoomId).emit('presence:moved', {
+            userId: bot.userId,
+            x: bot.x,
+            y: bot.y,
+            orientation: bot.orientation,
+          });
+
+          io.to(currentRoomId).emit('presence:state-changed', {
+            userId: bot.userId,
+            isSpeaking: bot.isSpeaking,
+            isMuted: false,
+            isDeafened: false,
+            earshotRadius: bot.earshotRadius,
+          });
+        }
+      }, 400);
+
+      if (!botTimers.has(currentRoomId)) botTimers.set(currentRoomId, []);
+      botTimers.get(currentRoomId).push(intervalId);
+
+      socket.emit('simulation:spawned', { count: spawnedBots.length, bots: spawnedBots });
+    });
+
+    /**
+     * Simulation: Clear all bots
+     */
+    socket.on('simulation:clear', () => {
+      if (!currentRoomId) return;
+
+      const timers = botTimers.get(currentRoomId) || [];
+      timers.forEach((t) => clearInterval(t));
+      botTimers.set(currentRoomId, []);
+
+      const users = spatialStore.getAllUsers(currentRoomId);
+      for (const u of users) {
+        if (u.isBot) {
+          spatialStore.removeUser(currentRoomId, u.userId);
+          io.to(currentRoomId).emit('presence:left', { userId: u.userId, socketId: u.socketId });
+        }
+      }
+    });
+
+    /**
+     * User disconnects
+     */
+    socket.on('disconnect', () => {
+      peerAudibilityMap.delete(socket.id);
+      const removed = spatialStore.removeSocket(socket.id);
+
       if (removed) {
-        logger.info(`User departed: ${removed.name} (${removed.userId})`);
-        io.emit('user:left', {
-          userId: removed.userId,
+        const { roomId, user } = removed;
+        io.to(roomId).emit('presence:left', {
+          userId: user.userId,
           socketId: socket.id,
         });
+
+        // Clean up from MongoDB
+        try {
+          if (UserPresence.db && UserPresence.db.readyState === 1) {
+            UserPresence.deleteOne({ userId: user.userId }).exec();
+          }
+        } catch (err) {
+          // ignore
+        }
+
+        logger.info(`User ${user.name} (${user.userId}) left room "${roomId}"`);
       }
     });
   });

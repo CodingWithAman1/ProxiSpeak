@@ -1,128 +1,220 @@
 /**
- * Spatial Audio & Proximity Computation Engine
- * Runs on the server to compute real-time peer graphs, earshot proximity,
- * WebRTC mesh trigger requirements, and acoustic wall occlusion.
+ * Spatial Engine — Computes real-time proximity falloff, stereo panning angles,
+ * and raycasting wall occlusion.
  */
+import config from '../config/index.js';
 
-export function calculateDistance(a, b) {
-  const ax = a.x ?? a.location?.coordinates?.[0] ?? 0;
-  const ay = a.y ?? a.location?.coordinates?.[1] ?? 0;
-  const bx = b.x ?? b.location?.coordinates?.[0] ?? 0;
-  const by = b.y ?? b.location?.coordinates?.[1] ?? 0;
-  return Math.hypot(ax - bx, ay - by);
-}
+/**
+ * Checks if two line segments (p1->p2 and p3->p4) intersect.
+ */
+export function lineSegmentsIntersect(p1x, p1y, p2x, p2y, p3x, p3y, p4x, p4y) {
+  const ccw = (ax, ay, bx, by, cx, cy) => {
+    return (cy - ay) * (bx - ax) > (by - ay) * (cx - ax);
+  };
 
-export function pixelsToMeters(pixels) {
-  return Number((pixels / 15).toFixed(1));
-}
+  const a = ccw(p1x, p1y, p3x, p3y, p4x, p4y);
+  const b = ccw(p2x, p2y, p3x, p3y, p4x, p4y);
+  const c = ccw(p1x, p1y, p2x, p2y, p3x, p3y);
+  const d = ccw(p1x, p1y, p2x, p2y, p4x, p4y);
 
-export function calculateProximityGain(distance, earshotRadius, isOccluded = false) {
-  if (distance > earshotRadius) return 0;
-  if (distance <= 0) return 1;
-
-  // Inverse exponential falloff curve: loud when close, gradual fade to edge
-  const normalized = 1 - distance / earshotRadius;
-  const rawGain = Math.pow(normalized, 1.4);
-
-  // Apply acoustic low-pass attenuation if muffled behind solid walls or closed doors
-  return Number(Math.max(0, Math.min(1, isOccluded ? rawGain * 0.35 : rawGain)).toFixed(3));
-}
-
-export function calculateStereoPan(listener, source, maxRadius = 150) {
-  const lx = listener.x ?? listener.location?.coordinates?.[0] ?? 0;
-  const sx = source.x ?? source.location?.coordinates?.[0] ?? 0;
-  const dx = sx - lx;
-  const pan = dx / (maxRadius || 1);
-  return Number(Math.max(-1, Math.min(1, pan)).toFixed(3));
-}
-
-export function linesIntersect(x1, y1, x2, y2, x3, y3, x4, y4) {
-  const denom = (y4 - y3) * (x2 - x1) - (x4 - x3) * (y2 - y1);
-  if (denom === 0) return false;
-
-  const ua = ((x4 - x3) * (y1 - y3) - (y4 - y3) * (x1 - x3)) / denom;
-  const ub = ((x2 - x1) * (y1 - y3) - (y2 - y1) * (x1 - x3)) / denom;
-
-  return ua >= 0 && ua <= 1 && ub >= 0 && ub <= 1;
-}
-
-export function checkWallOcclusion(posA, posB, walls = []) {
-  const ax = posA.x ?? posA.location?.coordinates?.[0] ?? 0;
-  const ay = posA.y ?? posA.location?.coordinates?.[1] ?? 0;
-  const bx = posB.x ?? posB.location?.coordinates?.[0] ?? 0;
-  const by = posB.y ?? posB.location?.coordinates?.[1] ?? 0;
-
-  for (const wall of walls) {
-    if (linesIntersect(ax, ay, bx, by, wall.start.x, wall.start.y, wall.end.x, wall.end.y)) {
-      return true;
-    }
-  }
-  return false;
+  return a !== b && c !== d;
 }
 
 /**
- * Computes proximity neighbors for a specific user against all other active users
+ * Calculates Euclidean distance between two 2D points.
  */
-export function getNeighborsForUser(user, allUsers = [], walls = [], doors = []) {
-  // Combine static walls with closed doors to form the effective acoustic occluder set
-  const activeAcousticWalls = [...walls];
-  doors.forEach((door) => {
-    if (!door.isOpen) {
-      if (door.orientation === 'vertical') {
-        const midX = door.x + door.w / 2;
-        activeAcousticWalls.push({
-          start: { x: midX, y: door.y },
-          end: { x: midX, y: door.y + door.h },
-        });
-      } else {
-        const midY = door.y + door.h / 2;
-        activeAcousticWalls.push({
-          start: { x: door.x, y: midY },
-          end: { x: door.x + door.w, y: midY },
-        });
-      }
-    }
-  });
-
-  const earshot = user.earshotRadius || 150;
-  const neighbors = [];
-
-  for (const other of allUsers) {
-    if (other.userId === user.userId) continue;
-
-    const dist = calculateDistance(user, other);
-    const inRange = dist <= earshot;
-    const isOccluded = inRange ? checkWallOcclusion(user, other, activeAcousticWalls) : false;
-    const gain = inRange ? calculateProximityGain(dist, earshot, isOccluded) : 0;
-    const pan = inRange ? calculateStereoPan(user, other, earshot) : 0;
-
-    neighbors.push({
-      userId: other.userId,
-      socketId: other.socketId,
-      name: other.name,
-      color: other.color,
-      x: other.x ?? other.location?.coordinates?.[0] ?? 0,
-      y: other.y ?? other.location?.coordinates?.[1] ?? 0,
-      distance: Number(dist.toFixed(1)),
-      distanceMeters: pixelsToMeters(dist),
-      inRange,
-      isOccluded,
-      gain,
-      pan,
-      isMuted: !!other.isMuted,
-      isSpeaking: !!other.isSpeaking,
-      isSeated: !!other.isSeated,
-    });
-  }
-
-  return neighbors;
+export function calculateDistance(x1, y1, x2, y2) {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  return Math.sqrt(dx * dx + dy * dy);
 }
 
-export default {
-  calculateDistance,
-  pixelsToMeters,
-  calculateProximityGain,
-  calculateStereoPan,
-  checkWallOcclusion,
-  getNeighborsForUser,
-};
+/**
+ * Calculates proximity gain based on distance, min hearing distance, and earshot radius.
+ * Uses a smooth cosine/inverse falloff curve.
+ */
+export function calculateProximityGain(distance, earshotRadius, minDistance = config.spatial.minHearingDistance) {
+  if (distance <= minDistance) return 1.0;
+  if (distance >= earshotRadius) return 0.0;
+
+  // Normalized distance 0..1 between minDistance and earshotRadius
+  const normalized = (distance - minDistance) / (earshotRadius - minDistance);
+  // Smooth cosine roll-off: 1 at 0, 0 at 1
+  return Math.max(0, Math.min(1, 0.5 * (1 + Math.cos(normalized * Math.PI))));
+}
+
+/**
+ * Calculates relative angle (azimuth) from listener to source in range [-180, 180] degrees,
+ * taking listener orientation into account.
+ * Panning value: -1.0 (full left) to +1.0 (full right).
+ */
+export function calculateStereoPan(listenerX, listenerY, listenerOrientation, sourceX, sourceY) {
+  const dx = sourceX - listenerX;
+  const dy = sourceY - listenerY;
+  if (dx === 0 && dy === 0) return 0;
+
+  // World angle from listener to source in radians
+  const angleToSource = Math.atan2(dy, dx);
+  // Relative angle to listener facing direction
+  let relativeAngle = angleToSource - listenerOrientation;
+
+  // Normalize to [-PI, PI]
+  while (relativeAngle > Math.PI) relativeAngle -= 2 * Math.PI;
+  while (relativeAngle < -Math.PI) relativeAngle += 2 * Math.PI;
+
+  // Stereo pan from sine of relative angle: -1 (left) to 1 (right)
+  return Math.sin(relativeAngle);
+}
+
+/**
+ * Raycasts line of sight against all room walls to compute acoustic occlusion.
+ */
+export function checkWallOcclusion(p1x, p1y, p2x, p2y, walls = []) {
+  let occludedWalls = 0;
+  let totalAttenuationDb = 0;
+  let lowestCutoffFreq = 20000;
+
+  for (const wall of walls) {
+    if (lineSegmentsIntersect(p1x, p1y, p2x, p2y, wall.x1, wall.y1, wall.x2, wall.y2)) {
+      occludedWalls += 1;
+      totalAttenuationDb += wall.attenuationDb || config.spatial.wallAttenuationDb;
+      const cutoff = wall.cutoffFreq || config.spatial.wallCutoffFreq;
+      if (cutoff < lowestCutoffFreq) {
+        lowestCutoffFreq = cutoff;
+      }
+    }
+  }
+
+  const isOccluded = occludedWalls > 0;
+  // Convert dB attenuation to linear gain multiplier: gain = 10^(-dB / 20)
+  const occlusionGainFactor = isOccluded ? Math.max(0.05, Math.pow(10, -totalAttenuationDb / 20)) : 1.0;
+
+  return {
+    isOccluded,
+    wallCount: occludedWalls,
+    totalAttenuationDb,
+    occlusionGainFactor,
+    cutoffFreq: isOccluded ? lowestCutoffFreq : 20000,
+  };
+}
+
+/**
+ * Complete acoustic relationship computation between listener and speaker.
+ */
+export function computeSpatialAudioProfile(listener, speaker, roomWalls = []) {
+  const distance = calculateDistance(listener.x, listener.y, speaker.x, speaker.y);
+  const earshot = listener.earshotRadius || config.spatial.defaultEarshotRadius;
+  const inEarshot = distance <= earshot;
+
+  if (!inEarshot) {
+    return {
+      inEarshot: false,
+      distance: Math.round(distance * 100) / 100,
+      gain: 0,
+      pan: 0,
+      isOccluded: false,
+      cutoffFreq: 20000,
+    };
+  }
+
+  const baseGain = calculateProximityGain(distance, earshot, config.spatial.minHearingDistance);
+  const occlusion = checkWallOcclusion(listener.x, listener.y, speaker.x, speaker.y, roomWalls);
+  const effectiveGain = baseGain * occlusion.occlusionGainFactor;
+  const pan = calculateStereoPan(listener.x, listener.y, listener.orientation || 0, speaker.x, speaker.y);
+
+  return {
+    inEarshot: true,
+    distance: Math.round(distance * 100) / 100,
+    baseGain: Math.round(baseGain * 1000) / 1000,
+    gain: Math.round(effectiveGain * 1000) / 1000,
+    pan: Math.round(pan * 1000) / 1000,
+    isOccluded: occlusion.isOccluded,
+    occlusionGainFactor: occlusion.occlusionGainFactor,
+    cutoffFreq: occlusion.cutoffFreq,
+    wallCount: occlusion.wallCount,
+  };
+}
+
+/**
+ * In-memory spatial state store for instant low-latency presence tracking.
+ */
+class SpatialStore {
+  constructor() {
+    this.rooms = new Map(); // roomId -> Map(userId, presence)
+    this.roomWalls = new Map(); // roomId -> Array(walls)
+  }
+
+  setRoomWalls(roomId, walls) {
+    this.roomWalls.set(roomId, walls || []);
+  }
+
+  getRoomWalls(roomId) {
+    return this.roomWalls.get(roomId) || [];
+  }
+
+  setUser(roomId, user) {
+    if (!this.rooms.has(roomId)) {
+      this.rooms.set(roomId, new Map());
+    }
+    this.rooms.get(roomId).set(user.userId, { ...user, lastSeen: Date.now() });
+  }
+
+  getUser(roomId, userId) {
+    return this.rooms.get(roomId)?.get(userId) || null;
+  }
+
+  removeUser(roomId, userId) {
+    const room = this.rooms.get(roomId);
+    if (room) {
+      room.delete(userId);
+      if (room.size === 0) this.rooms.delete(roomId);
+    }
+  }
+
+  removeSocket(socketId) {
+    for (const [roomId, room] of this.rooms.entries()) {
+      for (const [userId, user] of room.entries()) {
+        if (user.socketId === socketId) {
+          room.delete(userId);
+          return { roomId, user };
+        }
+      }
+    }
+    return null;
+  }
+
+  getAllUsers(roomId) {
+    const room = this.rooms.get(roomId);
+    if (!room) return [];
+    return Array.from(room.values());
+  }
+
+  /**
+   * Computes spatial audit for all active users in a room.
+   */
+  computeProximityGraph(roomId) {
+    const users = this.getAllUsers(roomId);
+    const walls = this.getRoomWalls(roomId);
+    const graph = {};
+
+    for (let i = 0; i < users.length; i++) {
+      const u1 = users[i];
+      graph[u1.userId] = {
+        user: u1,
+        connections: {},
+      };
+
+      for (let j = 0; j < users.length; j++) {
+        if (i === j) continue;
+        const u2 = users[j];
+        const profile = computeSpatialAudioProfile(u1, u2, walls);
+        graph[u1.userId].connections[u2.userId] = profile;
+      }
+    }
+
+    return graph;
+  }
+}
+
+export const spatialStore = new SpatialStore();
+export default spatialStore;

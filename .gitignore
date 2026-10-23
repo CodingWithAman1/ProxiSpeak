@@ -1,19 +1,24 @@
 # Dependencies
 node_modules/
+server/node_modules/
+client/node_modules/
 
-# Environment files — never commit real credentials
+# Environment files
 .env
 .env.*
 !.env.example
 
-# Client build output (arrives in a later week)
+# Client build output
 client/dist/
 
 # Logs
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-# OS junk
+# OS and Editor files
 .DS_Store
-
-# Separate hackathon project
-pip-portfolio/
+Thumbs.db
+.vscode/
+.idea/

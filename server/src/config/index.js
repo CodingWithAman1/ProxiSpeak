@@ -1,10 +1,6 @@
 /**
- * Central configuration. Every tunable lives here and is sourced from .env
- * (server/.env wins over the repo-root .env). Nothing else in the codebase
- * reads process.env directly.
- *
- * Day 1: only the HTTP server knobs exist. Mongo/Redis/socket config blocks
- * are added on the days that actually introduce those dependencies.
+ * ProxiSpeak — Central Application Configuration
+ * Loads environment variables with strong type validation and defaults.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -15,8 +11,6 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const SERVER_ROOT = path.resolve(__dirname, '..', '..');
 export const REPO_ROOT = path.resolve(SERVER_ROOT, '..');
 
-// dotenv never overrides an already-set key, so the more specific file is
-// loaded first and therefore has the higher effective priority.
 for (const candidate of [path.join(SERVER_ROOT, '.env'), path.join(REPO_ROOT, '.env')]) {
   if (fs.existsSync(candidate)) dotenv.config({ path: candidate });
 }
@@ -50,29 +44,26 @@ export const config = Object.freeze({
   logLevel: str('LOG_LEVEL', 'info'),
 
   server: Object.freeze({
-    // Most PaaS hosts inject PORT; 4000 stays the local default.
     port: num('PORT', 4000, { min: 1, max: 65535 }),
     host: str('HOST', '0.0.0.0'),
-    /**
-     * Allowed browser origins (CLIENT_URL, comma separated). Empty on Day 1 =
-     * any origin may call the API; once the React client exists this locks
-     * down to the listed origins.
-     */
-    clientOrigins: list('CLIENT_URL', 'http://localhost:5173,http://127.0.0.1:5173'),
+    clientOrigins: list('CLIENT_URL', 'http://localhost:5173,http://localhost:4000,http://127.0.0.1:5173,http://127.0.0.1:4000'),
   }),
 
-  db: Object.freeze({
-    uri: str('MONGODB_URI', 'mongodb://localhost:27017/proxispeak'),
+  mongo: Object.freeze({
+    uri: str('MONGO_URI', 'mongodb://127.0.0.1:27017/proxispeak'),
+  }),
+
+  redis: Object.freeze({
+    url: str('REDIS_URL', 'redis://127.0.0.1:6379'),
+    enabled: str('REDIS_ENABLED', 'false') === 'true',
   }),
 
   spatial: Object.freeze({
-    defaultEarshotRadius: num('DEFAULT_EARSHOT_RADIUS', 150),
-    worldWidth: 1024,
-    worldHeight: 571,
-    iceServers: [
-      { urls: 'stun:stun.l.google.com:19302' },
-      { urls: 'stun:stun1.l.google.com:19302' },
-    ],
+    defaultEarshotRadius: num('DEFAULT_EARSHOT_RADIUS', 20, { min: 5, max: 100 }),
+    minHearingDistance: num('MIN_HEARING_DISTANCE', 2, { min: 0.5, max: 20 }),
+    wallAttenuationDb: num('WALL_ATTENUATION_DB', 18, { min: 0, max: 60 }),
+    wallCutoffFreq: num('WALL_CUTOFF_FREQ', 480, { min: 100, max: 4000 }),
+    tickRateMs: num('TICK_RATE_MS', 50, { min: 16, max: 200 }),
   }),
 });
 
