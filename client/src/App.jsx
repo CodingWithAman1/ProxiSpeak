@@ -207,13 +207,12 @@ export function App() {
     return () => clearInterval(interval);
   }, [player, windows, ambientSoundEnabled]);
 
-  // Microphone audio visualizer
+  // Microphone audio visualizer (metered at 80ms to keep React renders buttery-smooth)
   useEffect(() => {
-    let animId;
     let tick = 0;
 
-    const updateMicActivity = () => {
-      tick += 0.05;
+    const interval = setInterval(() => {
+      tick += 0.1;
       if (isMuted) {
         setMicDecibels(0);
       } else {
@@ -221,15 +220,13 @@ export function App() {
         if (realVol > 0.01) {
           setMicDecibels(realVol);
         } else {
-          const naturalSim = Math.max(0, (Math.sin(tick * 3) + Math.cos(tick * 5)) * 0.25 + 0.15);
-          setMicDecibels(naturalSim);
+          const naturalSim = Math.max(0, (Math.sin(tick * 2.5) + Math.cos(tick * 4)) * 0.22 + 0.12);
+          setMicDecibels(Number(naturalSim.toFixed(2)));
         }
       }
-      animId = requestAnimationFrame(updateMicActivity);
-    };
+    }, 80);
 
-    animId = requestAnimationFrame(updateMicActivity);
-    return () => cancelAnimationFrame(animId);
+    return () => clearInterval(interval);
   }, [isMuted]);
 
   // Subtle natural peer movements

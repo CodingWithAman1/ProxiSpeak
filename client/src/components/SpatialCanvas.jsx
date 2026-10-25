@@ -39,14 +39,18 @@ export function SpatialCanvas({
   const animFrameRef = useRef(null);
   const targetPosRef = useRef({ x: player.x, y: player.y });
   const isDraggingPlayer = useRef(false);
-  const [mapImageLoaded, setMapImageLoaded] = useState(false);
-  const mapImageRef = useRef(null);
 
-  // Keep live references for collision engine & background loop without stale closures
+  // Keep live references for collision engine & render loop without tearing down animation loop
   const wallsRef = useRef(walls);
   const doorsRef = useRef(doors);
   const playerRef = useRef(player);
   const peersRef = useRef(peers);
+  const windowsRef = useRef(windows);
+  const roomsRef = useRef(rooms);
+  const plantsRef = useRef(plants);
+  const furnitureRef = useRef(furniture);
+  const earshotRadiusRef = useRef(earshotRadius);
+  const isMicActiveRef = useRef(isMicActive);
   const collisionAlertsRef = useRef([]);
 
   useEffect(() => {
@@ -65,17 +69,31 @@ export function SpatialCanvas({
     peersRef.current = peers;
   }, [peers]);
 
-  // Preload the stylized modern biophilic office background map
   useEffect(() => {
-    const img = new Image();
-    img.src = '/office_map_modern.jpg';
-    img.onload = () => {
-      mapImageRef.current = img;
-      setMapImageLoaded(true);
-    };
-  }, []);
+    windowsRef.current = windows;
+  }, [windows]);
 
-  // Sync target pos if player was teleported or seated
+  useEffect(() => {
+    roomsRef.current = rooms;
+  }, [rooms]);
+
+  useEffect(() => {
+    plantsRef.current = plants;
+  }, [plants]);
+
+  useEffect(() => {
+    furnitureRef.current = furniture;
+  }, [furniture]);
+
+  useEffect(() => {
+    earshotRadiusRef.current = earshotRadius;
+  }, [earshotRadius]);
+
+  useEffect(() => {
+    isMicActiveRef.current = isMicActive;
+  }, [isMicActive]);
+
+  // Sync target pos if player was teleported or seated externally
   useEffect(() => {
     if (Math.abs(targetPosRef.current.x - player.x) > 35 || Math.abs(targetPosRef.current.y - player.y) > 35) {
       targetPosRef.current = { x: player.x, y: player.y };
@@ -90,7 +108,6 @@ export function SpatialCanvas({
       message,
       createdAt: Date.now(),
     });
-    // Keep max 5 active alerts
     if (collisionAlertsRef.current.length > 5) {
       collisionAlertsRef.current.shift();
     }
@@ -143,7 +160,6 @@ export function SpatialCanvas({
 
         // If movement was blocked by a wall or closed door
         if (Math.hypot(resolved.x - prev.x, resolved.y - prev.y) < 0.1 && (dx !== 0 || dy !== 0)) {
-          // Check if blocked by a closed door
           const closedDoorNear = doorsRef.current.find(
             (d) => !d.isOpen && Math.hypot(d.x + d.w / 2 - prev.x, d.y + d.h / 2 - prev.y) < 32
           );
@@ -153,7 +169,8 @@ export function SpatialCanvas({
         }
 
         targetPosRef.current = { x: resolved.x, y: resolved.y };
-        return { ...prev, x: resolved.x, y: resolved.y, isSeated: false };
+        playerRef.current = { ...prev, x: resolved.x, y: resolved.y, isSeated: false };
+        return playerRef.current;
       });
     }, 20);
 
@@ -175,7 +192,7 @@ export function SpatialCanvas({
     const clickY = (e.clientY - rect.top) * scaleY;
 
     // 1. Check Doors Click (Manual Open / Close)
-    for (const door of doors) {
+    for (const door of doorsRef.current) {
       if (
         clickX >= door.x - 14 &&
         clickX <= door.x + door.w + 14 &&
@@ -187,13 +204,15 @@ export function SpatialCanvas({
       }
     }
 
-    // 2. Check Windows Click
-    for (const win of windows) {
+    // 2. Check Windows Click (Generous 16px hitbox padding on all sides)
+    for (const win of windowsRef.current) {
+      const padX = win.orientation === 'vertical' ? 16 : 8;
+      const padY = win.orientation === 'vertical' ? 8 : 16;
       if (
-        clickX >= win.x &&
-        clickX <= win.x + win.w &&
-        clickY >= win.y - 12 &&
-        clickY <= win.y + win.h + 16
+        clickX >= win.x - padX &&
+        clickX <= win.x + win.w + padX &&
+        clickY >= win.y - padY &&
+        clickY <= win.y + win.h + padY
       ) {
         if (onToggleWindow) onToggleWindow(win.id);
         return;
@@ -201,7 +220,7 @@ export function SpatialCanvas({
     }
 
     // 3. Check Chairs (Boardroom Table & Desks)
-    const table = furniture.conferenceTable;
+    const table = furnitureRef.current.conferenceTable;
     for (const chair of table.chairs) {
       if (Math.hypot(clickX - chair.x, clickY - chair.y) <= 18) {
         if (onSitChair) onSitChair(chair);
@@ -210,14 +229,14 @@ export function SpatialCanvas({
     }
 
     // 4. Check Coffee Machine
-    const coffee = furniture.coffeeMachine;
+    const coffee = furnitureRef.current.coffeeMachine;
     if (Math.hypot(clickX - coffee.x, clickY - coffee.y) <= 24) {
       if (onBrewCoffee) onBrewCoffee();
       return;
     }
 
     // 5. Check Water Coolers
-    for (const cooler of furniture.waterCoolers) {
+    for (const cooler of furnitureRef.current.waterCoolers) {
       if (Math.hypot(clickX - cooler.x, clickY - cooler.y) <= cooler.radius + 8) {
         if (onDrinkWater) onDrinkWater(cooler);
         return;
@@ -225,19 +244,19 @@ export function SpatialCanvas({
     }
 
     // 6. Check Whiteboard
-    const wb = furniture.whiteboard;
+    const wb = furnitureRef.current.whiteboard;
     if (
       clickX >= wb.x &&
       clickX <= wb.x + wb.w &&
       clickY >= wb.y &&
-      clickY <= wb.y + wb.h
+      clickY <= wb.y + wb.h + 20
     ) {
       if (onToggleWhiteboard) onToggleWhiteboard();
       return;
     }
 
     // 7. Check Plants
-    for (const plant of plants) {
+    for (const plant of plantsRef.current) {
       if (Math.hypot(clickX - plant.x, clickY - plant.y) <= plant.radius + 10) {
         if (onInteractPlant) onInteractPlant(plant);
         return;
@@ -245,7 +264,7 @@ export function SpatialCanvas({
     }
 
     // 8. Check Peers Click
-    for (const peer of peers) {
+    for (const peer of peersRef.current) {
       if (Math.hypot(clickX - peer.x, clickY - peer.y) < 24) {
         if (onPeerClick) onPeerClick(peer);
         return;
@@ -255,9 +274,8 @@ export function SpatialCanvas({
     // 9. Walk to location with Wall Collision Enforcement
     const isTargetColliding = isPositionColliding({ x: clickX, y: clickY }, 12, wallsRef.current, doorsRef.current);
     if (isTargetColliding) {
-      // Find if clicked on a closed door
       const closedDoor = doorsRef.current.find(
-        (d) => !d.isOpen && clickX >= d.x - 8 && clickX <= d.x + d.w + 8 && clickY >= d.y - 8 && clickY <= d.y + d.h + 8
+        (d) => !d.isOpen && clickX >= d.x - 12 && clickX <= d.x + d.w + 12 && clickY >= d.y - 12 && clickY <= d.y + d.h + 12
       );
       if (closedDoor) {
         triggerCollisionWarning(clickX, clickY, '🔒 Door Closed: Click to Open');
@@ -269,7 +287,7 @@ export function SpatialCanvas({
     targetPosRef.current = { x: clickX, y: clickY };
     isDraggingPlayer.current = true;
     if (onCanvasClick) onCanvasClick({ x: clickX, y: clickY });
-  }, [doors, windows, furniture, plants, peers, onToggleDoor, onToggleWindow, onSitChair, onBrewCoffee, onDrinkWater, onToggleWhiteboard, onInteractPlant, onPeerClick, onCanvasClick, triggerCollisionWarning]);
+  }, [onToggleDoor, onToggleWindow, onSitChair, onBrewCoffee, onDrinkWater, onToggleWhiteboard, onInteractPlant, onPeerClick, onCanvasClick, triggerCollisionWarning]);
 
   const handleMouseMove = useCallback((e) => {
     if (!isDraggingPlayer.current) return;
@@ -288,7 +306,7 @@ export function SpatialCanvas({
     isDraggingPlayer.current = false;
   }, []);
 
-  // Main 60 FPS Render & Animation Loop
+  // Main 60 FPS Procedural Architectural Canvas Loop
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -298,7 +316,7 @@ export function SpatialCanvas({
     const render = () => {
       time += 0.025;
 
-      // --- A. Smooth Door Background Animation Lerp ---
+      // --- A. Smooth Door Lerp ---
       doorsRef.current.forEach((door) => {
         const target = door.isOpen ? 1 : 0;
         const lerpSpeed = door.type === 'glass_double' ? 0.09 : 0.08;
@@ -311,144 +329,504 @@ export function SpatialCanvas({
       });
 
       // --- B. Smooth Avatar Lerp with Wall Collision Restrictions ---
-      setPlayer((prev) => {
-        if (prev.isSeated) return prev;
+      const curPlayer = playerRef.current;
+      if (!curPlayer.isSeated) {
         const tx = targetPosRef.current.x;
         const ty = targetPosRef.current.y;
-        const dist = Math.hypot(tx - prev.x, ty - prev.y);
+        const dist = Math.hypot(tx - curPlayer.x, ty - curPlayer.y);
 
         if (dist > 1.2) {
-          const stepSpeed = Math.min(dist, 4.6);
-          const angle = Math.atan2(ty - prev.y, tx - prev.x);
+          const stepSpeed = Math.min(dist, 4.8);
+          const angle = Math.atan2(ty - curPlayer.y, tx - curPlayer.x);
           const candidate = {
-            x: prev.x + Math.cos(angle) * stepSpeed,
-            y: prev.y + Math.sin(angle) * stepSpeed,
+            x: curPlayer.x + Math.cos(angle) * stepSpeed,
+            y: curPlayer.y + Math.sin(angle) * stepSpeed,
           };
 
-          // Apply physical wall and door restriction
-          const resolved = resolvePlayerMovement(prev, candidate, 12, wallsRef.current, doorsRef.current);
-
-          // If avatar is completely blocked from reaching the clicked destination
-          const moved = Math.hypot(resolved.x - prev.x, resolved.y - prev.y);
+          const resolved = resolvePlayerMovement(curPlayer, candidate, 12, wallsRef.current, doorsRef.current);
+          const moved = Math.hypot(resolved.x - curPlayer.x, resolved.y - curPlayer.y);
           if (moved < 0.05 && dist > 5) {
             targetPosRef.current = { x: resolved.x, y: resolved.y };
           }
 
-          return {
-            ...prev,
+          playerRef.current = {
+            ...curPlayer,
             x: resolved.x,
             y: resolved.y,
           };
+          setPlayer(playerRef.current);
         }
-        return prev;
-      });
-
-      // Clear Frame
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      // --- 1. Stylized Architectural Base Map ---
-      if (mapImageRef.current && mapImageLoaded) {
-        ctx.drawImage(mapImageRef.current, 0, 0, canvas.width, canvas.height);
-      } else {
-        ctx.fillStyle = '#0c121e';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
       }
 
-      // --- 2. Subtle Blueprint Wall Boundary Guides (Shows Restricted Paths) ---
-      ctx.save();
-      // Match the map's inked timber wall outlines rather than adding a neon blueprint.
-      ctx.strokeStyle = 'rgba(61, 43, 31, 0.30)';
-      ctx.lineWidth = 2;
-      wallsRef.current.forEach((w) => {
-        ctx.beginPath();
-        ctx.moveTo(w.start.x, w.start.y);
-        ctx.lineTo(w.end.x, w.end.y);
-        ctx.stroke();
-      });
-      ctx.restore();
+      // =========================================================================
+      // 1. PROCEDURAL ARCHITECTURAL FLOOR MATERIALS & ROOM ZONING
+      // =========================================================================
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // --- 3. Interactive Windows Overlay & Rain/Sun Light Beams ---
-      windows.forEach((win) => {
+      // Deep foundation base
+      ctx.fillStyle = '#080d16';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Render room zones with tactile material textures
+      roomsRef.current.forEach((room) => {
         ctx.save();
-        if (win.isOpen) {
-          // Open Window: Atmospheric sun/rain light cone flooding into the room
-          const lightGrad = ctx.createLinearGradient(win.x, win.y, win.x, win.y + (win.y < 100 ? 55 : -55));
-          lightGrad.addColorStop(0, 'rgba(56, 189, 248, 0.35)');
-          lightGrad.addColorStop(1, 'rgba(56, 189, 248, 0.0)');
-          ctx.fillStyle = lightGrad;
-          ctx.fillRect(win.x, win.y + (win.y < 100 ? win.h : -55), win.w, 55);
+        ctx.beginPath();
+        ctx.rect(room.x, room.y, room.w, room.h);
+        ctx.clip();
 
-          // Flowing breeze wave lines
-          const waveShift = (time * 20) % 30;
-          ctx.strokeStyle = 'rgba(147, 197, 253, 0.6)';
+        if (room.floorType === 'teak_parquet') {
+          // Executive Boardroom: Warm polished teak hardwood parquet
+          const grad = ctx.createLinearGradient(room.x, room.y, room.x + room.w, room.y + room.h);
+          grad.addColorStop(0, '#532b12');
+          grad.addColorStop(1, '#693717');
+          ctx.fillStyle = grad;
+          ctx.fillRect(room.x, room.y, room.w, room.h);
+
+          // Alternating teak floorboard plank lines
+          ctx.strokeStyle = 'rgba(25, 12, 5, 0.45)';
+          ctx.lineWidth = 1;
+          for (let py = room.y; py <= room.y + room.h; py += 16) {
+            ctx.beginPath();
+            ctx.moveTo(room.x, py);
+            ctx.lineTo(room.x + room.w, py);
+            ctx.stroke();
+          }
+          ctx.strokeStyle = 'rgba(235, 180, 130, 0.08)';
+          for (let px = room.x; px <= room.x + room.w; px += 44) {
+            ctx.beginPath();
+            ctx.moveTo(px, room.y);
+            ctx.lineTo(px, room.y + room.h);
+            ctx.stroke();
+          }
+        } else if (room.floorType === 'basalt_slate') {
+          // Central Atrium & Corridor: Basalt slate large format pavers
+          const grad = ctx.createLinearGradient(room.x, room.y, room.x, room.y + room.h);
+          grad.addColorStop(0, '#1a2433');
+          grad.addColorStop(1, '#1e2b3c');
+          ctx.fillStyle = grad;
+          ctx.fillRect(room.x, room.y, room.w, room.h);
+
+          // Slate tile grid & joint grout
+          ctx.strokeStyle = 'rgba(148, 163, 184, 0.12)';
+          ctx.lineWidth = 1;
+          for (let px = room.x; px <= room.x + room.w; px += 35) {
+            ctx.beginPath();
+            ctx.moveTo(px, room.y);
+            ctx.lineTo(px, room.y + room.h);
+            ctx.stroke();
+          }
+          for (let py = room.y; py <= room.y + room.h; py += 35) {
+            ctx.beginPath();
+            ctx.moveTo(room.x, py);
+            ctx.lineTo(room.x + room.w, py);
+            ctx.stroke();
+          }
+
+          // Center accent runner strip
+          ctx.fillStyle = 'rgba(6, 182, 212, 0.06)';
+          ctx.fillRect(room.x + room.w / 2 - 24, room.y, 48, room.h);
+        } else if (room.floorType === 'tech_carpet') {
+          // Developer Hub: High-density acoustic dark charcoal carpet tile
+          const grad = ctx.createLinearGradient(room.x, room.y, room.x + room.w, room.y);
+          grad.addColorStop(0, '#121822');
+          grad.addColorStop(1, '#17202e');
+          ctx.fillStyle = grad;
+          ctx.fillRect(room.x, room.y, room.w, room.h);
+
+          // Carpet weave micro-grid
+          ctx.strokeStyle = 'rgba(56, 189, 248, 0.05)';
+          ctx.lineWidth = 1;
+          for (let px = room.x; px <= room.x + room.w; px += 28) {
+            ctx.beginPath();
+            ctx.moveTo(px, room.y);
+            ctx.lineTo(px, room.y + room.h);
+            ctx.stroke();
+          }
+          for (let py = room.y; py <= room.y + room.h; py += 28) {
+            ctx.beginPath();
+            ctx.moveTo(room.x, py);
+            ctx.lineTo(room.x + room.w, py);
+            ctx.stroke();
+          }
+        } else if (room.floorType === 'hex_bistro') {
+          // Cafeteria & Lounge: Hex bistro ceramic tile with warm oak cafe bar zone
+          ctx.fillStyle = '#222d3b';
+          ctx.fillRect(room.x, room.y, room.w, room.h);
+
+          // Warm wooden lounge floor near seating
+          ctx.fillStyle = 'rgba(120, 65, 25, 0.18)';
+          ctx.fillRect(room.x + 30, room.y + 40, room.w - 50, room.h - 70);
+
+          ctx.strokeStyle = 'rgba(148, 163, 184, 0.09)';
+          ctx.lineWidth = 1;
+          for (let px = room.x; px <= room.x + room.w; px += 24) {
+            ctx.beginPath();
+            ctx.moveTo(px, room.y);
+            ctx.lineTo(px, room.y + room.h);
+            ctx.stroke();
+          }
+        } else if (room.floorType === 'travertine_marble') {
+          // Welcome Lobby & Reception: Travertine marble with brass perimeter inlays
+          const grad = ctx.createLinearGradient(room.x, room.y, room.x, room.y + room.h);
+          grad.addColorStop(0, '#36281d');
+          grad.addColorStop(1, '#423225');
+          ctx.fillStyle = grad;
+          ctx.fillRect(room.x, room.y, room.w, room.h);
+
+          // Inlay borders
+          ctx.strokeStyle = 'rgba(245, 158, 11, 0.22)';
           ctx.lineWidth = 1.5;
+          ctx.strokeRect(room.x + 12, room.y + 12, room.w - 24, room.h - 24);
+        } else if (room.floorType === 'acoustic_felt') {
+          // Focus Pods: Deep acoustic sound-dampening felt
+          ctx.fillStyle = '#1e112d';
+          ctx.fillRect(room.x, room.y, room.w, room.h);
+          ctx.strokeStyle = 'rgba(168, 85, 247, 0.1)';
+          ctx.lineWidth = 1;
+          for (let py = room.y; py <= room.y + room.h; py += 18) {
+            ctx.beginPath();
+            ctx.moveTo(room.x, py);
+            ctx.lineTo(room.x + room.w, py);
+            ctx.stroke();
+          }
+        } else {
+          // Restrooms: Clean modern porcelain subway tile
+          ctx.fillStyle = '#263342';
+          ctx.fillRect(room.x, room.y, room.w, room.h);
+          ctx.strokeStyle = 'rgba(241, 245, 249, 0.14)';
+          ctx.lineWidth = 1;
+          for (let px = room.x; px <= room.x + room.w; px += 20) {
+            ctx.beginPath();
+            ctx.moveTo(px, room.y);
+            ctx.lineTo(px, room.y + room.h);
+            ctx.stroke();
+          }
+        }
+
+        // Room architectural watermarked title
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.14)';
+        ctx.font = 'bold 10px "Plus Jakarta Sans", sans-serif';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        ctx.fillText(`${room.name.toUpperCase()} • ${room.code}`, room.x + 16, room.y + 14);
+
+        ctx.restore();
+      });
+
+      // =========================================================================
+      // 2. REAL MULTI-PANE ARCHITECTURAL PANORAMIC WINDOWS
+      // =========================================================================
+      windowsRef.current.forEach((win) => {
+        ctx.save();
+        const isVert = win.orientation === 'vertical';
+
+        // --- A. Window Sill & Outer Structural Framing ---
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(win.x - 2, win.y - 2, win.w + 4, win.h + 4);
+        ctx.strokeStyle = '#334155';
+        ctx.lineWidth = 1.2;
+        ctx.strokeRect(win.x - 2, win.y - 2, win.w + 4, win.h + 4);
+
+        if (win.isOpen) {
+          // --- B. Open Window: Atmospheric Sun & Rain Volumetric Light Cone ---
+          let lightGrad;
+          if (isVert) {
+            const isWest = win.x < 100;
+            const xEnd = isWest ? win.x + win.w + 70 : win.x - 70;
+            lightGrad = ctx.createLinearGradient(win.x, win.y, xEnd, win.y);
+            lightGrad.addColorStop(0, 'rgba(56, 189, 248, 0.38)');
+            lightGrad.addColorStop(1, 'rgba(56, 189, 248, 0.0)');
+            ctx.fillStyle = lightGrad;
+            ctx.fillRect(isWest ? win.x : win.x - 70, win.y, win.w + 70, win.h);
+          } else {
+            const isNorth = win.y < 100;
+            const yEnd = isNorth ? win.y + win.h + 65 : win.y - 65;
+            lightGrad = ctx.createLinearGradient(win.x, win.y, win.x, yEnd);
+            lightGrad.addColorStop(0, 'rgba(56, 189, 248, 0.38)');
+            lightGrad.addColorStop(1, 'rgba(56, 189, 248, 0.0)');
+            ctx.fillStyle = lightGrad;
+            ctx.fillRect(win.x, isNorth ? win.y : win.y - 65, win.w, win.h + 65);
+          }
+
+          // Live animated drifting breeze / rain particle ripples
+          const numParticles = 6;
+          for (let i = 0; i < numParticles; i++) {
+            const particlePhase = (time * 1.8 + i * 1.5) % 3;
+            const alpha = Math.max(0, 1 - particlePhase / 3) * 0.75;
+            ctx.fillStyle = `rgba(186, 230, 253, ${alpha})`;
+            let px, py;
+            if (isVert) {
+              const dir = win.x < 100 ? 1 : -1;
+              px = win.x + win.w / 2 + dir * (particlePhase * 22);
+              py = win.y + 20 + i * (win.h / numParticles) + Math.sin(time * 2 + i) * 6;
+            } else {
+              const dir = win.y < 100 ? 1 : -1;
+              px = win.x + 20 + i * (win.w / numParticles) + Math.cos(time * 2 + i) * 6;
+              py = win.y + win.h / 2 + dir * (particlePhase * 20);
+            }
+            ctx.beginPath();
+            ctx.arc(px, py, 2, 0, Math.PI * 2);
+            ctx.fill();
+          }
+
+          // Glass Open Cavity
+          ctx.fillStyle = 'rgba(6, 182, 212, 0.16)';
+          ctx.fillRect(win.x, win.y, win.w, win.h);
+
+          // Flowing acoustic breeze dash wave
+          ctx.strokeStyle = 'rgba(125, 211, 252, 0.7)';
+          ctx.lineWidth = 1.4;
           ctx.setLineDash([4, 6]);
+          ctx.lineDashOffset = -time * 25;
           ctx.beginPath();
-          const waveY = win.y + (win.y < 100 ? 10 + waveShift : -waveShift);
-          ctx.moveTo(win.x + 15, waveY);
-          ctx.lineTo(win.x + win.w - 15, waveY);
+          if (isVert) {
+            ctx.moveTo(win.x + win.w / 2, win.y + 6);
+            ctx.lineTo(win.x + win.w / 2, win.y + win.h - 6);
+          } else {
+            ctx.moveTo(win.x + 6, win.y + win.h / 2);
+            ctx.lineTo(win.x + win.w - 6, win.y + win.h / 2);
+          }
           ctx.stroke();
           ctx.setLineDash([]);
 
-          // Interactive Open Window Pill
-          ctx.fillStyle = 'rgba(2, 132, 199, 0.9)';
+          // Interactive Status Pill
+          const midX = win.x + win.w / 2;
+          const midY = win.y + win.h / 2;
+          const pillX = isVert ? (win.x < 100 ? win.x + win.w + 48 : win.x - 48) : midX;
+          const pillY = isVert ? midY : (win.y < 100 ? win.y + win.h + 16 : win.y - 14);
+
+          ctx.fillStyle = 'rgba(2, 132, 199, 0.92)';
           ctx.beginPath();
-          ctx.roundRect(win.x + win.w / 2 - 45, win.y + (win.y < 100 ? 12 : -20), 90, 18, 9);
+          ctx.roundRect(pillX - 52, pillY - 9, 104, 18, 9);
           ctx.fill();
-          ctx.fillStyle = '#f0fdf4';
-          ctx.font = 'bold 9px "Plus Jakarta Sans", sans-serif';
-          ctx.textAlign = 'center';
-          ctx.fillText('🌧️ OPEN (Click)', win.x + win.w / 2, win.y + (win.y < 100 ? 24 : -8));
-        } else {
-          // Closed Window: Subtle specular glass shine
-          ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+          ctx.strokeStyle = '#38bdf8';
           ctx.lineWidth = 1;
-          ctx.beginPath();
-          ctx.moveTo(win.x + 10, win.y + 4);
-          ctx.lineTo(win.x + 35, win.y + win.h - 4);
           ctx.stroke();
+
+          ctx.fillStyle = '#f0fdf4';
+          ctx.font = 'bold 8.5px "Plus Jakarta Sans", sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('🌧️ OPEN (Click)', pillX, pillY);
+        } else {
+          // --- C. Closed Window: Multi-Pane Glazing with Mullions & Specular Reflection ---
+          ctx.fillStyle = 'rgba(34, 211, 238, 0.2)';
+          ctx.fillRect(win.x, win.y, win.w, win.h);
+
+          const panes = win.panes || 4;
+          ctx.strokeStyle = '#64748b';
+          ctx.lineWidth = 1.2;
+
+          if (isVert) {
+            const paneH = win.h / panes;
+            for (let i = 1; i < panes; i++) {
+              ctx.beginPath();
+              ctx.moveTo(win.x, win.y + i * paneH);
+              ctx.lineTo(win.x + win.w, win.y + i * paneH);
+              ctx.stroke();
+            }
+          } else {
+            const paneW = win.w / panes;
+            for (let i = 1; i < panes; i++) {
+              ctx.beginPath();
+              ctx.moveTo(win.x + i * paneW, win.y);
+              ctx.lineTo(win.x + i * paneW, win.y + win.h);
+              ctx.stroke();
+            }
+          }
+
+          // Specular Glaze Reflections
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.55)';
+          ctx.lineWidth = 1;
+          if (isVert) {
+            ctx.beginPath();
+            ctx.moveTo(win.x + 3, win.y + 12);
+            ctx.lineTo(win.x + win.w - 3, win.y + 36);
+            ctx.stroke();
+          } else {
+            ctx.beginPath();
+            ctx.moveTo(win.x + 12, win.y + win.h - 3);
+            ctx.lineTo(win.x + 36, win.y + 3);
+            ctx.stroke();
+          }
+
+          // Closed Status Pill (Subtle interactive hint)
+          const midX = win.x + win.w / 2;
+          const midY = win.y + win.h / 2;
+          const pillX = isVert ? (win.x < 100 ? win.x + win.w + 48 : win.x - 48) : midX;
+          const pillY = isVert ? midY : (win.y < 100 ? win.y + win.h + 16 : win.y - 14);
+
+          ctx.fillStyle = 'rgba(15, 23, 42, 0.88)';
+          ctx.beginPath();
+          ctx.roundRect(pillX - 52, pillY - 9, 104, 18, 9);
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(148, 163, 184, 0.35)';
+          ctx.lineWidth = 1;
+          ctx.stroke();
+
+          ctx.fillStyle = '#cbd5e1';
+          ctx.font = 'bold 8.5px "Plus Jakarta Sans", sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('🪟 CLOSED (Click)', pillX, pillY);
         }
         ctx.restore();
       });
 
-      // --- 4. Interactive Doors & Automatic Sliding Gates (Background Animations) ---
+      // =========================================================================
+      // 3. ARCHITECTURAL STRUCTURAL WALLS & FROSTED GLASS ACOUSTIC PARTITIONS
+      // =========================================================================
+      wallsRef.current.forEach((w) => {
+        // Skip drawing furniture obstacle collision lines as walls
+        if (w.type === 'furniture_obstacle') return;
+
+        ctx.save();
+        if (w.type === 'glass_partition') {
+          // --- A. Frosted Cyan Double-Glazed Acoustic Glass Partition ---
+          ctx.strokeStyle = 'rgba(6, 182, 212, 0.7)';
+          ctx.lineWidth = 8;
+          ctx.beginPath();
+          ctx.moveTo(w.start.x, w.start.y);
+          ctx.lineTo(w.end.x, w.end.y);
+          ctx.stroke();
+
+          // Glass core highlight
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.65)';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(w.start.x, w.start.y);
+          ctx.lineTo(w.end.x, w.end.y);
+          ctx.stroke();
+
+          // Brushed Aluminum Mullion Posts along the glass partition
+          const dx = w.end.x - w.start.x;
+          const dy = w.end.y - w.start.y;
+          const len = Math.hypot(dx, dy);
+          const postSpacing = 36;
+          const count = Math.floor(len / postSpacing);
+          ctx.fillStyle = '#cbd5e1';
+          for (let i = 0; i <= count; i++) {
+            const frac = i / count;
+            const mx = w.start.x + dx * frac;
+            const my = w.start.y + dy * frac;
+            ctx.beginPath();
+            ctx.arc(mx, my, 4, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        } else if (w.type === 'exterior') {
+          // --- B. Heavy 12px Exterior Perimeter Concrete / Graphite Walls ---
+          // Outer structural shadow
+          ctx.strokeStyle = 'rgba(0, 0, 0, 0.55)';
+          ctx.lineWidth = 14;
+          ctx.beginPath();
+          ctx.moveTo(w.start.x, w.start.y);
+          ctx.lineTo(w.end.x, w.end.y);
+          ctx.stroke();
+
+          // Solid graphite core
+          ctx.strokeStyle = '#182230';
+          ctx.lineWidth = 10;
+          ctx.beginPath();
+          ctx.moveTo(w.start.x, w.start.y);
+          ctx.lineTo(w.end.x, w.end.y);
+          ctx.stroke();
+
+          // Outer architectural drafting contour
+          ctx.strokeStyle = '#475569';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(w.start.x, w.start.y);
+          ctx.lineTo(w.end.x, w.end.y);
+          ctx.stroke();
+        } else {
+          // --- C. Solid 8px Interior Divider Walls ---
+          ctx.strokeStyle = '#1e293b';
+          ctx.lineWidth = 8;
+          ctx.beginPath();
+          ctx.moveTo(w.start.x, w.start.y);
+          ctx.lineTo(w.end.x, w.end.y);
+          ctx.stroke();
+
+          // Interior wall border lines
+          ctx.strokeStyle = '#64748b';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(w.start.x, w.start.y);
+          ctx.lineTo(w.end.x, w.end.y);
+          ctx.stroke();
+
+          // End jamb caps
+          ctx.fillStyle = '#475569';
+          ctx.beginPath();
+          ctx.arc(w.start.x, w.start.y, 4, 0, Math.PI * 2);
+          ctx.arc(w.end.x, w.end.y, 4, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+      });
+
+      // Structural Reinforced Corner Pillars
+      const cornerColumns = [
+        { x: 18, y: 16 },
+        { x: 1000, y: 16 },
+        { x: 18, y: 552 },
+        { x: 1000, y: 552 },
+        { x: 436, y: 16 },
+        { x: 577, y: 16 },
+        { x: 410, y: 552 },
+        { x: 544, y: 552 },
+      ];
+      cornerColumns.forEach((col) => {
+        ctx.save();
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(col.x - 7, col.y - 7, 14, 14);
+        ctx.strokeStyle = '#06b6d4';
+        ctx.lineWidth = 1.2;
+        ctx.strokeRect(col.x - 7, col.y - 7, 14, 14);
+        ctx.fillStyle = '#38bdf8';
+        ctx.beginPath();
+        ctx.arc(col.x, col.y, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      });
+
+      // =========================================================================
+      // 4. INTERACTIVE DOORS & AUTOMATIC SLIDING GATES
+      // =========================================================================
       doorsRef.current.forEach((door) => {
         ctx.save();
         const progress = door.openProgress !== undefined ? door.openProgress : (door.isOpen ? 1 : 0);
 
         if (door.type === 'glass_double') {
-          // ==========================================
-          // A. HIGH-TECH AUTOMATIC SLIDING GLASS GATES
-          // ==========================================
+          // AUTOMATIC SLIDING GLASS GATE
           const halfW = door.w / 2;
           const slideDist = (halfW - 5) * progress;
 
-          // Header Mounting Track & Housing
-          ctx.fillStyle = '#594638';
+          // Stainless Steel Header Track
+          ctx.fillStyle = '#334155';
           ctx.fillRect(door.x - 2, door.y - 3, door.w + 4, 5);
-          ctx.strokeStyle = '#94775d';
+          ctx.strokeStyle = '#64748b';
           ctx.lineWidth = 1;
           ctx.strokeRect(door.x - 2, door.y - 3, door.w + 4, 5);
 
-          // Floor Guide Track
-          ctx.fillStyle = '#74583f';
+          // Floor guide track
+          ctx.fillStyle = '#1e293b';
           ctx.fillRect(door.x - 2, door.y + door.h - 2, door.w + 4, 4);
 
-          // Walkway Threshold Glow (Emerald when opening/open, amber when closed)
+          // Walkway Threshold Glow
           const trackAlpha = 0.25 + progress * 0.45;
-          ctx.fillStyle = progress > 0.4 ? `rgba(78, 125, 94, ${trackAlpha * 0.58})` : `rgba(151, 111, 65, ${trackAlpha * 0.45})`;
+          ctx.fillStyle = progress > 0.4 ? `rgba(16, 185, 129, ${trackAlpha * 0.35})` : `rgba(245, 158, 11, ${trackAlpha * 0.25})`;
           ctx.fillRect(door.x + 2, door.y + 2, door.w - 4, door.h - 4);
 
-          // Autonomous Motion Sensor Puck with Expanding Radar Rings
+          // Motion Sensor Puck
           const isSensorActive = door.sensorActive;
-          const sensorPulse = Math.sin(time * 5) * 0.3 + 0.7;
-          ctx.fillStyle = isSensorActive ? '#6b9c72' : '#8aa6a0';
+          ctx.fillStyle = isSensorActive ? '#10b981' : '#38bdf8';
           ctx.beginPath();
           ctx.arc(door.x + halfW, door.y - 3, 3.5, 0, Math.PI * 2);
           ctx.fill();
 
           if (isSensorActive) {
-            ctx.strokeStyle = `rgba(16, 185, 129, ${sensorPulse})`;
+            ctx.strokeStyle = 'rgba(16, 185, 129, 0.8)';
             ctx.lineWidth = 1.4;
             ctx.beginPath();
             const ringR = 6 + ((time * 24) % 12);
@@ -456,57 +834,26 @@ export function SpatialCanvas({
             ctx.stroke();
           }
 
-          // --- Left Sliding Glass Panel ---
+          // Left Sliding Glass Panel
           const leftX = door.x - slideDist;
-          ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
-          ctx.shadowBlur = 6;
-          ctx.fillStyle = 'rgba(133, 187, 190, 0.28)';
+          ctx.fillStyle = 'rgba(6, 182, 212, 0.35)';
           ctx.fillRect(leftX, door.y, halfW, door.h);
-          ctx.shadowBlur = 0;
-
-          // Panel frame & specular reflection
-          ctx.strokeStyle = progress > 0.5 ? '#9bb9a1' : '#738f91';
+          ctx.strokeStyle = progress > 0.5 ? '#34d399' : '#06b6d4';
           ctx.lineWidth = 1.5;
           ctx.strokeRect(leftX, door.y, halfW, door.h);
 
-          ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
-          ctx.lineWidth = 1;
-          ctx.beginPath();
-          ctx.moveTo(leftX + 4, door.y + 3);
-          ctx.lineTo(leftX + halfW - 4, door.y + door.h - 3);
-          ctx.stroke();
-
-          // Left Handle Bar
-          ctx.fillStyle = '#f8fafc';
-          ctx.fillRect(leftX + halfW - 4, door.y + door.h * 0.25, 2, door.h * 0.5);
-
-          // --- Right Sliding Glass Panel ---
+          // Right Sliding Glass Panel
           const rightX = door.x + halfW + slideDist;
-          ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
-          ctx.shadowBlur = 6;
-          ctx.fillStyle = 'rgba(133, 187, 190, 0.28)';
+          ctx.fillStyle = 'rgba(6, 182, 212, 0.35)';
           ctx.fillRect(rightX, door.y, halfW, door.h);
-          ctx.shadowBlur = 0;
-
-          ctx.strokeStyle = progress > 0.5 ? '#9bb9a1' : '#738f91';
+          ctx.strokeStyle = progress > 0.5 ? '#34d399' : '#06b6d4';
           ctx.lineWidth = 1.5;
           ctx.strokeRect(rightX, door.y, halfW, door.h);
 
-          ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
-          ctx.lineWidth = 1;
-          ctx.beginPath();
-          ctx.moveTo(rightX + 4, door.y + 3);
-          ctx.lineTo(rightX + halfW - 4, door.y + door.h - 3);
-          ctx.stroke();
-
-          // Right Handle Bar
-          ctx.fillStyle = '#f8fafc';
-          ctx.fillRect(rightX + 2, door.y + door.h * 0.25, 2, door.h * 0.5);
-
-          // Status Badge Pill
+          // Door Status Pill
           const badgeY = door.y < 100 ? door.y + door.h + 14 : door.y - 12;
           let badgeText = 'GATE CLOSED';
-          let badgeBg = 'rgba(15, 23, 42, 0.88)';
+          let badgeBg = 'rgba(15, 23, 42, 0.9)';
           let badgeColor = '#94a3b8';
 
           if (isSensorActive) {
@@ -537,11 +884,9 @@ export function SpatialCanvas({
           ctx.textBaseline = 'middle';
           ctx.fillText(badgeText, door.x + halfW, badgeY);
         } else {
-          // ==========================================
-          // B. WOODEN SINGLE-LEAF SWING DOORS
-          // ==========================================
+          // WOODEN SINGLE-LEAF SWING DOOR
           const isVertical = door.orientation === 'vertical';
-          const maxAngle = Math.PI / 2.15; // ~84 degrees
+          const maxAngle = Math.PI / 2.15;
           const angle = progress * maxAngle;
           const leafLen = isVertical ? door.h : door.w;
           const leafThick = 4.5;
@@ -557,9 +902,9 @@ export function SpatialCanvas({
             hingeY = door.y + door.h / 2;
           }
 
-          // Blueprint Swing Arc Guideline
+          // Swing Arc Guideline
           if (progress > 0.05) {
-            ctx.strokeStyle = 'rgba(145, 111, 75, 0.5)';
+            ctx.strokeStyle = 'rgba(245, 158, 11, 0.4)';
             ctx.lineWidth = 1;
             ctx.setLineDash([3, 4]);
             ctx.beginPath();
@@ -570,19 +915,14 @@ export function SpatialCanvas({
             ctx.setLineDash([]);
           }
 
-          // Open Walkway Threshold Highlight
+          // Open threshold
           if (progress > 0.3) {
-            ctx.fillStyle = 'rgba(89, 137, 93, 0.16)';
+            ctx.fillStyle = 'rgba(16, 185, 129, 0.15)';
             ctx.fillRect(door.x, door.y, door.w, door.h);
-            ctx.strokeStyle = 'rgba(89, 137, 93, 0.48)';
-            ctx.lineWidth = 1;
-            ctx.setLineDash([2, 3]);
-            ctx.strokeRect(door.x, door.y, door.w, door.h);
-            ctx.setLineDash([]);
           }
 
-          // Door Frame Jambs
-          ctx.fillStyle = '#59402d';
+          // Frame Jambs
+          ctx.fillStyle = '#475569';
           if (isVertical) {
             ctx.fillRect(door.x - 2, door.y - 2, door.w + 4, 3);
             ctx.fillRect(door.x - 2, door.y + door.h - 1, door.w + 4, 3);
@@ -597,50 +937,36 @@ export function SpatialCanvas({
           const rotDirection = (door.hinge === 'right' || door.hinge === 'bottom') ? -1 : 1;
           ctx.rotate(rotDirection * angle);
 
-          // Drop shadow cast onto floor
-          ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
-          ctx.shadowBlur = 8;
-          ctx.shadowOffsetY = 3;
-
           const woodGrad = ctx.createLinearGradient(0, 0, leafLen, 0);
-          woodGrad.addColorStop(0, '#875c3c');
-          woodGrad.addColorStop(0.5, '#a8754c');
-          woodGrad.addColorStop(1, '#c08a5b');
+          woodGrad.addColorStop(0, '#78350f');
+          woodGrad.addColorStop(1, '#b45309');
           ctx.fillStyle = woodGrad;
 
           if (isVertical) {
             ctx.fillRect(-leafThick / 2, 0, leafThick, leafLen);
-            ctx.shadowBlur = 0;
-            ctx.strokeStyle = '#d0a06c';
+            ctx.strokeStyle = '#d97706';
             ctx.lineWidth = 1;
             ctx.strokeRect(-leafThick / 2, 0, leafThick, leafLen);
-
-            // Brass Handle
-            ctx.fillStyle = '#fef08a';
+            // Brass handle
+            ctx.fillStyle = '#fde047';
             ctx.beginPath();
             ctx.arc(0, leafLen * 0.85, 2.5, 0, Math.PI * 2);
             ctx.fill();
           } else {
             ctx.fillRect(0, -leafThick / 2, leafLen, leafThick);
-            ctx.shadowBlur = 0;
-            ctx.strokeStyle = '#d0a06c';
+            ctx.strokeStyle = '#d97706';
             ctx.lineWidth = 1;
             ctx.strokeRect(0, -leafThick / 2, leafLen, leafThick);
-
-            // Brass Handle
-            ctx.fillStyle = '#fef08a';
+            ctx.fillStyle = '#fde047';
             ctx.beginPath();
             ctx.arc(leafLen * 0.85, 0, 2.5, 0, Math.PI * 2);
             ctx.fill();
           }
           ctx.restore();
 
-          // Status Badge Pill
-          const isFullyOpen = progress > 0.85;
-          const isMoving = progress > 0.05 && progress < 0.95;
-          const tagY = door.y < 100 ? door.y + door.h + 14 : door.y - 10;
+          // Door Status Badge
           const midX = door.x + door.w / 2;
-
+          const tagY = door.y < 100 ? door.y + door.h + 14 : door.y - 10;
           ctx.fillStyle = progress > 0.5 ? 'rgba(6, 78, 59, 0.9)' : 'rgba(15, 23, 42, 0.88)';
           ctx.beginPath();
           ctx.roundRect(midX - 42, tagY - 7, 84, 15, 7);
@@ -653,50 +979,114 @@ export function SpatialCanvas({
           ctx.font = 'bold 8px "Plus Jakarta Sans", sans-serif';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.fillText(
-            isMoving
-              ? (door.isOpen ? 'OPENING...' : 'CLOSING...')
-              : isFullyOpen
-              ? 'OPEN (Walk)'
-              : 'CLOSED (Click)',
-            midX,
-            tagY
-          );
+          ctx.fillText(progress > 0.85 ? 'OPEN (Walk)' : 'CLOSED (Click)', midX, tagY);
         }
         ctx.restore();
       });
 
-      // --- 5. Interactive Chairs Overlay & Sit Indicators ---
-      const table = furniture.conferenceTable;
+      // =========================================================================
+      // 5. INTERACTIVE FURNITURE & AMENITIES
+      // =========================================================================
+      // Conference Table & Chairs
+      const table = furnitureRef.current.conferenceTable;
+      ctx.save();
+      // Table drop shadow
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+      ctx.beginPath();
+      ctx.ellipse(table.x, table.y + 4, table.w / 2, table.h / 2, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Table solid slab
+      const tableGrad = ctx.createLinearGradient(table.x - table.w / 2, table.y, table.x + table.w / 2, table.y);
+      tableGrad.addColorStop(0, '#451a03');
+      tableGrad.addColorStop(0.5, '#78350f');
+      tableGrad.addColorStop(1, '#451a03');
+      ctx.fillStyle = tableGrad;
+      ctx.beginPath();
+      ctx.ellipse(table.x, table.y, table.w / 2, table.h / 2, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#d97706';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      // Center tech wire raceway
+      ctx.fillStyle = '#1e293b';
+      ctx.beginPath();
+      ctx.roundRect(table.x - 45, table.y - 8, 90, 16, 4);
+      ctx.fill();
+      ctx.restore();
+
+      // Chairs
       table.chairs.forEach((chair) => {
-        const isPlayerHere = player.isSeated && Math.hypot(player.x - chair.x, player.y - chair.y) < 12;
+        const isPlayerHere = curPlayer.isSeated && Math.hypot(curPlayer.x - chair.x, curPlayer.y - chair.y) < 12;
         const isOccupied = chair.occupant || isPlayerHere;
 
-        if (!isOccupied) {
-          ctx.save();
-          const chairPulse = Math.sin(time * 3 + chair.x) * 0.3 + 0.7;
-          ctx.strokeStyle = `rgba(56, 189, 248, ${chairPulse * 0.5})`;
-          ctx.lineWidth = 1.5;
-          ctx.beginPath();
-          ctx.arc(chair.x, chair.y, 11, 0, Math.PI * 2);
-          ctx.stroke();
+        ctx.save();
+        ctx.fillStyle = isOccupied ? '#0369a1' : '#334155';
+        ctx.beginPath();
+        ctx.arc(chair.x, chair.y, 8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = isOccupied ? '#38bdf8' : '#64748b';
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
 
-          ctx.fillStyle = `rgba(15, 23, 42, 0.75)`;
-          ctx.beginPath();
-          ctx.roundRect(chair.x - 14, chair.y - 7, 28, 14, 5);
-          ctx.fill();
+        if (!isOccupied) {
           ctx.fillStyle = '#38bdf8';
-          ctx.font = 'bold 8px "Plus Jakarta Sans", sans-serif';
+          ctx.font = 'bold 7px "Plus Jakarta Sans", sans-serif';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
           ctx.fillText('SIT', chair.x, chair.y);
-          ctx.restore();
         }
+        ctx.restore();
       });
 
-      // --- 6. Interactive Coffee Machine Animated Steam ---
-      const coffee = furniture.coffeeMachine;
+      // Developer Workstations
+      const devRows = [
+        { y: 115, monitors: 4 },
+        { y: 275, monitors: 4 },
+        { y: 435, monitors: 4 },
+      ];
+      devRows.forEach((row) => {
+        ctx.save();
+        ctx.fillStyle = '#1e293b';
+        ctx.fillRect(50, row.y - 12, 300, 24);
+        ctx.strokeStyle = '#475569';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(50, row.y - 12, 300, 24);
+
+        // Screens with glowing IDE terminals
+        for (let i = 0; i < row.monitors; i++) {
+          const mx = 75 + i * 72;
+          ctx.fillStyle = '#0f172a';
+          ctx.fillRect(mx - 14, row.y - 7, 28, 14);
+          ctx.strokeStyle = '#38bdf8';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(mx - 14, row.y - 7, 28, 14);
+
+          // Glowing IDE syntax line
+          ctx.fillStyle = i % 2 === 0 ? '#34d399' : '#06b6d4';
+          ctx.fillRect(mx - 10, row.y - 2, 20, 2);
+        }
+        ctx.restore();
+      });
+
+      // Barista Espresso Bar & Animated Steam
+      const coffee = furnitureRef.current.coffeeMachine;
       ctx.save();
+      // Counter
+      ctx.fillStyle = '#3f2212';
+      ctx.fillRect(655, 260, 145, 24);
+      ctx.strokeStyle = '#92400e';
+      ctx.lineWidth = 1.2;
+      ctx.strokeRect(655, 260, 145, 24);
+
+      // Coffee machine block
+      ctx.fillStyle = '#475569';
+      ctx.fillRect(coffee.x - 12, coffee.y - 10, 24, 20);
+      ctx.strokeStyle = '#cbd5e1';
+      ctx.strokeRect(coffee.x - 12, coffee.y - 10, 24, 20);
+
+      // Animated rising steam
       const steamY = coffee.y - 8 - ((time * 20) % 20);
       const steamAlpha = Math.max(0, 1 - (coffee.y - 8 - steamY) / 20);
       ctx.fillStyle = `rgba(254, 243, 199, ${steamAlpha * 0.8})`;
@@ -716,25 +1106,52 @@ export function SpatialCanvas({
       ctx.fillText('☕ BREW', coffee.x, coffee.y + 22);
       ctx.restore();
 
-      // --- 7. Interactive Whiteboard Banner ---
-      const wb = furniture.whiteboard;
+      // 4K Presentation Display
+      const wb = furnitureRef.current.whiteboard;
       ctx.save();
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
-      ctx.beginPath();
-      ctx.roundRect(wb.x - 10, wb.y + wb.h + 2, wb.w + 20, 16, 6);
-      ctx.fill();
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(wb.x, wb.y, wb.w, wb.h);
       ctx.strokeStyle = '#0284c7';
-      ctx.lineWidth = 1;
-      ctx.stroke();
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(wb.x, wb.y, wb.w, wb.h);
+
       ctx.fillStyle = '#38bdf8';
       ctx.font = 'bold 8px "Plus Jakarta Sans", sans-serif';
       ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(`📋 ${wb.slides[wb.slideIndex].slice(0, 26)}...`, wb.x + wb.w / 2, wb.y + wb.h + 10);
+      ctx.fillText('4K DISPLAY', wb.x + wb.w / 2, wb.y + 14);
+
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.88)';
+      ctx.beginPath();
+      ctx.roundRect(wb.x - 20, wb.y + wb.h + 3, wb.w + 40, 16, 6);
+      ctx.fill();
+      ctx.fillStyle = '#e0f2fe';
+      ctx.font = '8px "Plus Jakarta Sans", sans-serif';
+      ctx.fillText(`📋 ${wb.slides[wb.slideIndex].slice(0, 28)}...`, wb.x + wb.w / 2, wb.y + wb.h + 12);
       ctx.restore();
 
-      // --- 8. Spatial Mesh Audio Connection Beams ---
-      // Combine walls and closed doors for acoustic sound occlusion
+      // Lush Biophilic Plants
+      plantsRef.current.forEach((plant) => {
+        ctx.save();
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+        ctx.beginPath();
+        ctx.arc(plant.x, plant.y + 3, plant.radius, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#15803d';
+        ctx.beginPath();
+        ctx.arc(plant.x, plant.y, plant.radius, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#22c55e';
+        ctx.beginPath();
+        ctx.arc(plant.x - 4, plant.y - 4, plant.radius * 0.6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      });
+
+      // =========================================================================
+      // 6. SPATIAL MESH AUDIO RAYS & OCCLUSION BEAMS
+      // =========================================================================
       const activeAcousticWalls = [...wallsRef.current];
       doorsRef.current.forEach((door) => {
         const isPassable = door.isOpen && (door.openProgress === undefined || door.openProgress >= 0.65);
@@ -757,22 +1174,22 @@ export function SpatialCanvas({
         }
       });
 
-      peers.forEach((peer) => {
-        const dist = calculateDistance(player, peer);
-        const inRange = dist <= earshotRadius;
-        const isOccluded = checkWallOcclusion(player, peer, activeAcousticWalls);
+      peersRef.current.forEach((peer) => {
+        const dist = calculateDistance(curPlayer, peer);
+        const inRange = dist <= earshotRadiusRef.current;
+        const isOccluded = checkWallOcclusion(curPlayer, peer, activeAcousticWalls);
 
         if (inRange) {
-          const gain = calculateProximityGain(dist, earshotRadius, isOccluded);
+          const gain = calculateProximityGain(dist, earshotRadiusRef.current, isOccluded);
           ctx.save();
           ctx.setLineDash([5, 5]);
           ctx.lineDashOffset = -time * 20;
 
           if (isOccluded) {
-            ctx.strokeStyle = 'rgba(245, 158, 11, 0.85)'; // Muffled through closed door/wall
+            ctx.strokeStyle = 'rgba(245, 158, 11, 0.85)';
             ctx.lineWidth = 2;
           } else {
-            const grad = ctx.createLinearGradient(player.x, player.y, peer.x, peer.y);
+            const grad = ctx.createLinearGradient(curPlayer.x, curPlayer.y, peer.x, peer.y);
             grad.addColorStop(0, 'rgba(6, 182, 212, 0.9)');
             grad.addColorStop(1, peer.color);
             ctx.strokeStyle = grad;
@@ -780,13 +1197,13 @@ export function SpatialCanvas({
           }
 
           ctx.beginPath();
-          ctx.moveTo(player.x, player.y);
+          ctx.moveTo(curPlayer.x, curPlayer.y);
           ctx.lineTo(peer.x, peer.y);
           ctx.stroke();
 
           // Midpoint distance & volume badge
-          const midX = (player.x + peer.x) / 2;
-          const midY = (player.y + peer.y) / 2;
+          const midX = (curPlayer.x + peer.x) / 2;
+          const midY = (curPlayer.y + peer.y) / 2;
           const volPercent = Math.round(gain * 100);
 
           ctx.setLineDash([]);
@@ -812,17 +1229,19 @@ export function SpatialCanvas({
         }
       });
 
-      // --- 9. Local Player Earshot / Hearing Radius Bubble ---
+      // =========================================================================
+      // 7. LOCAL PLAYER EARSHOT RADIUS BUBBLE
+      // =========================================================================
       ctx.save();
       const pulse = Math.sin(time * 2.5) * 3;
-      const effectiveRadius = earshotRadius + pulse;
+      const effectiveRadius = earshotRadiusRef.current + pulse;
 
       const radialGrad = ctx.createRadialGradient(
-        player.x,
-        player.y,
+        curPlayer.x,
+        curPlayer.y,
         effectiveRadius * 0.2,
-        player.x,
-        player.y,
+        curPlayer.x,
+        curPlayer.y,
         effectiveRadius
       );
       radialGrad.addColorStop(0, 'rgba(6, 182, 212, 0.22)');
@@ -831,24 +1250,25 @@ export function SpatialCanvas({
 
       ctx.fillStyle = radialGrad;
       ctx.beginPath();
-      ctx.arc(player.x, player.y, effectiveRadius, 0, Math.PI * 2);
+      ctx.arc(curPlayer.x, curPlayer.y, effectiveRadius, 0, Math.PI * 2);
       ctx.fill();
 
-      // Outer boundary ring
       ctx.strokeStyle = 'rgba(34, 211, 238, 0.6)';
       ctx.lineWidth = 1.4;
       ctx.setLineDash([5, 5]);
       ctx.beginPath();
-      ctx.arc(player.x, player.y, effectiveRadius, 0, Math.PI * 2);
+      ctx.arc(curPlayer.x, curPlayer.y, effectiveRadius, 0, Math.PI * 2);
       ctx.stroke();
       ctx.setLineDash([]);
       ctx.restore();
 
-      // --- 10. Remote Peers Avatars ---
-      peers.forEach((peer) => {
+      // =========================================================================
+      // 8. PEERS AVATARS
+      // =========================================================================
+      peersRef.current.forEach((peer) => {
         ctx.save();
-        const dist = calculateDistance(player, peer);
-        const inRange = dist <= earshotRadius;
+        const dist = calculateDistance(curPlayer, peer);
+        const inRange = dist <= earshotRadiusRef.current;
 
         // Speaking Ripple
         if (peer.isSpeaking) {
@@ -861,7 +1281,6 @@ export function SpatialCanvas({
           ctx.stroke();
         }
 
-        // Avatar Body with Drop Shadow
         ctx.shadowColor = peer.color;
         ctx.shadowBlur = inRange ? 14 : 4;
         ctx.fillStyle = peer.color;
@@ -876,7 +1295,7 @@ export function SpatialCanvas({
         ctx.textBaseline = 'middle';
         ctx.fillText(peer.name.charAt(0), peer.x, peer.y);
 
-        // Nameplate Badge
+        // Nameplate
         ctx.fillStyle = 'rgba(11, 16, 26, 0.9)';
         ctx.beginPath();
         const nameW = 100;
@@ -898,44 +1317,45 @@ export function SpatialCanvas({
         ctx.restore();
       });
 
-      // --- 11. Local Player Avatar ---
+      // =========================================================================
+      // 9. LOCAL PLAYER AVATAR
+      // =========================================================================
       ctx.save();
-      if (isMicActive && micDecibels > 0.05) {
-        const micRipple = 18 + micDecibels * 30;
+      const liveMicVol = spatialAudio.getMicVolume();
+      if (isMicActiveRef.current && liveMicVol > 0.05) {
+        const micRipple = 18 + liveMicVol * 30;
         ctx.strokeStyle = 'rgba(16, 185, 129, 0.8)';
         ctx.lineWidth = 3;
         ctx.beginPath();
-        ctx.arc(player.x, player.y, micRipple, 0, Math.PI * 2);
+        ctx.arc(curPlayer.x, curPlayer.y, micRipple, 0, Math.PI * 2);
         ctx.stroke();
       }
 
-      // Player Glowing Ring
       ctx.shadowColor = '#06b6d4';
       ctx.shadowBlur = 18;
       ctx.fillStyle = '#06b6d4';
       ctx.beginPath();
-      ctx.arc(player.x, player.y, 15, 0, Math.PI * 2);
+      ctx.arc(curPlayer.x, curPlayer.y, 15, 0, Math.PI * 2);
       ctx.fill();
 
-      // Inner Core
       ctx.shadowBlur = 0;
       ctx.fillStyle = '#082f49';
       ctx.beginPath();
-      ctx.arc(player.x, player.y, 11, 0, Math.PI * 2);
+      ctx.arc(curPlayer.x, curPlayer.y, 11, 0, Math.PI * 2);
       ctx.fill();
 
       ctx.fillStyle = '#38bdf8';
       ctx.font = 'bold 9px "Plus Jakarta Sans", sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('YOU', player.x, player.y);
+      ctx.fillText('YOU', curPlayer.x, curPlayer.y);
 
       // Nameplate & Room Badge
-      const currentRoom = getContainingRoom(player, rooms);
+      const currentRoom = getContainingRoom(curPlayer, roomsRef.current);
       ctx.fillStyle = 'rgba(8, 47, 73, 0.95)';
       ctx.beginPath();
       const tagW = 106;
-      ctx.roundRect(player.x - tagW / 2, player.y + 20, tagW, 20, 6);
+      ctx.roundRect(curPlayer.x - tagW / 2, curPlayer.y + 20, tagW, 20, 6);
       ctx.fill();
       ctx.strokeStyle = '#06b6d4';
       ctx.lineWidth = 1.2;
@@ -943,22 +1363,24 @@ export function SpatialCanvas({
 
       ctx.fillStyle = '#f0fdf4';
       ctx.font = 'bold 9px "Plus Jakarta Sans", sans-serif';
-      ctx.fillText(player.isSeated ? 'Seated at Table 👥' : player.name, player.x, player.y + 30);
+      ctx.fillText(curPlayer.isSeated ? 'Seated at Table 👥' : curPlayer.name, curPlayer.x, curPlayer.y + 30);
 
       if (currentRoom) {
         ctx.fillStyle = currentRoom.color;
         ctx.font = '8px "JetBrains Mono", monospace';
-        ctx.fillText(`[${currentRoom.name.split(' ')[0]}]`, player.x, player.y + 48);
+        ctx.fillText(`[${currentRoom.name.split(' ')[0]}]`, curPlayer.x, curPlayer.y + 48);
       }
       ctx.restore();
 
-      // --- 12. Path Restriction Collision Warning Alerts (Animated Ping) ---
+      // =========================================================================
+      // 10. COLLISION WARNING ALERTS (Animated Ping)
+      // =========================================================================
       const now = Date.now();
       collisionAlertsRef.current = collisionAlertsRef.current.filter((alert) => now - alert.createdAt < 1800);
 
       collisionAlertsRef.current.forEach((alert) => {
         ctx.save();
-        const age = (now - alert.createdAt) / 1800; // 0 to 1
+        const age = (now - alert.createdAt) / 1800;
         const alpha = Math.max(0, 1 - age);
         const rippleRad = 12 + age * 26;
 
@@ -993,7 +1415,7 @@ export function SpatialCanvas({
     return () => {
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     };
-  }, [player, peers, rooms, windows, plants, furniture, earshotRadius, isMicActive, micDecibels, mapImageLoaded, setPlayer]);
+  }, [setPlayer]);
 
   return (
     <div className="relative w-full h-full select-none overflow-hidden rounded-2xl glass-panel shadow-2xl flex items-center justify-center bg-slate-950">
@@ -1010,7 +1432,7 @@ export function SpatialCanvas({
       <div className="absolute top-4 left-4 glass-card px-3.5 py-2 text-xs text-slate-300 flex items-center gap-3 pointer-events-none shadow-xl rounded-xl">
         <span className="flex h-2 w-2 rounded-full bg-cyan-400 animate-ping" />
         <span>
-          <strong className="text-cyan-300">Paths Restricted:</strong> Avatars cannot walk through walls or closed doors • Walk near <strong className="text-emerald-300">Glass Gates</strong> for Auto Sensors • Click <strong className="text-amber-300">Doors</strong> to Toggle
+          <strong className="text-cyan-300">Paths Restricted:</strong> Avatars cannot walk through walls or closed doors • Walk near <strong className="text-emerald-300">Glass Gates</strong> for Auto Sensors • Click <strong className="text-amber-300">Doors & Windows</strong> to Toggle
         </span>
       </div>
     </div>

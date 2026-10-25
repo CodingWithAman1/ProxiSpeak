@@ -22,9 +22,10 @@ export const INITIAL_ROOMS = [
     description: 'Executive suite with oval conference table, video display screen & living garden wall',
     x: 577,
     y: 16,
-    w: 422,
-    h: 185,
+    w: 423,
+    h: 189,
     color: '#06b6d4', // Cyan
+    floorType: 'teak_parquet',
     doorId: 'door-boardroom',
   },
   {
@@ -35,8 +36,9 @@ export const INITIAL_ROOMS = [
     x: 577,
     y: 205,
     w: 275,
-    h: 345,
+    h: 347,
     color: '#10b981', // Emerald
+    floorType: 'hex_bistro',
     doorId: null, // Open lounge entrance
   },
   {
@@ -47,8 +49,9 @@ export const INITIAL_ROOMS = [
     x: 18,
     y: 16,
     w: 418,
-    h: 535,
+    h: 536,
     color: '#38bdf8', // Sky
+    floorType: 'tech_carpet',
     doorId: 'door-devhub',
   },
   {
@@ -56,11 +59,12 @@ export const INITIAL_ROOMS = [
     name: 'Central Corridor & Atrium',
     code: 'ATRIUM',
     description: 'Slate tiled spine with motion-sensing glass sliding gates and lush planter boxes',
-    x: 435,
+    x: 436,
     y: 16,
-    w: 142,
-    h: 350,
+    w: 141,
+    h: 349,
     color: '#818cf8', // Indigo
+    floorType: 'basalt_slate',
     doorId: 'door-center-glass',
   },
   {
@@ -71,8 +75,9 @@ export const INITIAL_ROOMS = [
     x: 410,
     y: 365,
     w: 167,
-    h: 185,
+    h: 187,
     color: '#f59e0b', // Amber
+    floorType: 'travertine_marble',
     doorId: 'door-south-entrance',
   },
   {
@@ -82,9 +87,10 @@ export const INITIAL_ROOMS = [
     description: 'Private quiet booths for deep concentration, coding, and private calls',
     x: 852,
     y: 205,
-    w: 147,
+    w: 148,
     h: 235,
     color: '#a855f7', // Purple
+    floorType: 'acoustic_felt',
     doorId: 'door-focus-1',
   },
   {
@@ -92,11 +98,12 @@ export const INITIAL_ROOMS = [
     name: 'Restrooms',
     code: 'RESTROOMS',
     description: 'Executive washrooms with vanity sink and ceramic tiling',
-    x: 870,
+    x: 852,
     y: 440,
-    w: 129,
-    h: 110,
+    w: 148,
+    h: 112,
     color: '#ec4899', // Rose
+    floorType: 'subway_tile',
     doorId: 'door-restroom',
   },
 ];
@@ -108,9 +115,9 @@ export const INITIAL_DOORS = [
     name: 'North Glass Entrance',
     roomId: 'corridor',
     x: 468,
-    y: 16,
+    y: 8,
     w: 76,
-    h: 36,
+    h: 16,
     isOpen: false,
     openProgress: 0,
     targetOpen: 0,
@@ -124,9 +131,9 @@ export const INITIAL_DOORS = [
     name: 'Atrium Glass Doors',
     roomId: 'corridor',
     x: 444,
-    y: 198,
+    y: 194,
     w: 124,
-    h: 32,
+    h: 18,
     isOpen: true,
     openProgress: 1,
     targetOpen: 1,
@@ -140,9 +147,9 @@ export const INITIAL_DOORS = [
     name: 'South Main Entrance',
     roomId: 'reception',
     x: 472,
-    y: 532,
-    w: 66,
-    h: 26,
+    y: 544,
+    w: 72,
+    h: 16,
     isOpen: false,
     openProgress: 0,
     targetOpen: 0,
@@ -155,10 +162,10 @@ export const INITIAL_DOORS = [
     id: 'door-boardroom',
     name: 'Boardroom Door',
     roomId: 'boardroom',
-    x: 577,
-    y: 185,
-    w: 42,
-    h: 20,
+    x: 585,
+    y: 198,
+    w: 40,
+    h: 14,
     isOpen: false,
     openProgress: 0,
     targetOpen: 0,
@@ -171,10 +178,10 @@ export const INITIAL_DOORS = [
     id: 'door-devhub',
     name: 'Developer Hub Door',
     roomId: 'devhub',
-    x: 402,
-    y: 172,
-    w: 34,
-    h: 32,
+    x: 430,
+    y: 168,
+    w: 14,
+    h: 36,
     isOpen: true,
     openProgress: 1,
     targetOpen: 1,
@@ -189,8 +196,8 @@ export const INITIAL_DOORS = [
     roomId: 'focus_booths',
     x: 846,
     y: 228,
-    w: 18,
-    h: 34,
+    w: 14,
+    h: 36,
     isOpen: false,
     openProgress: 0,
     targetOpen: 0,
@@ -205,8 +212,8 @@ export const INITIAL_DOORS = [
     roomId: 'focus_booths',
     x: 846,
     y: 334,
-    w: 18,
-    h: 34,
+    w: 14,
+    h: 36,
     isOpen: false,
     openProgress: 0,
     targetOpen: 0,
@@ -220,9 +227,9 @@ export const INITIAL_DOORS = [
     name: 'Restroom Door',
     roomId: 'restrooms',
     x: 880,
-    y: 440,
-    w: 32,
-    h: 18,
+    y: 433,
+    w: 36,
+    h: 14,
     isOpen: false,
     openProgress: 0,
     targetOpen: 0,
@@ -233,50 +240,98 @@ export const INITIAL_DOORS = [
   },
 ];
 
-// Interactive Windows (Facing outside nature / forest; toggles rain and birdsong)
+// Interactive Architectural Multi-Pane Windows (Facing outside nature / forest / skyline; toggles rain and birdsong)
 export const INITIAL_WINDOWS = [
   {
     id: 'win-dev-north',
     name: 'Dev Hub Panoramic Windows',
     roomId: 'devhub',
-    x: 55,
-    y: 12,
-    w: 310,
-    h: 22,
+    x: 45,
+    y: 8,
+    w: 350,
+    h: 16,
+    orientation: 'horizontal',
+    panes: 6,
     isOpen: false,
     soundType: 'gentle_rain',
-    soundLabel: 'Gentle Rain on Forest',
+    soundLabel: 'Pine Forest Rain',
+  },
+  {
+    id: 'win-dev-west',
+    name: 'West Redwood Garden Windows',
+    roomId: 'devhub',
+    x: 10,
+    y: 100,
+    w: 16,
+    h: 350,
+    orientation: 'vertical',
+    panes: 6,
+    isOpen: false,
+    soundType: 'gentle_rain',
+    soundLabel: 'West Redwood Wind & Rain',
+  },
+  {
+    id: 'win-dev-south',
+    name: 'Dev Hub Courtyard Windows',
+    roomId: 'devhub',
+    x: 55,
+    y: 544,
+    w: 320,
+    h: 16,
+    orientation: 'horizontal',
+    panes: 5,
+    isOpen: false,
+    soundType: 'courtyard_breeze',
+    soundLabel: 'South Courtyard Breeze',
   },
   {
     id: 'win-boardroom-north',
-    name: 'Boardroom Nature Windows',
+    name: 'Boardroom Panoramic Forest Windows',
     roomId: 'boardroom',
-    x: 610,
-    y: 12,
-    w: 320,
-    h: 22,
+    x: 615,
+    y: 8,
+    w: 345,
+    h: 16,
+    orientation: 'horizontal',
+    panes: 6,
     isOpen: true,
     soundType: 'courtyard_breeze',
     soundLabel: 'Courtyard Breeze & Birds',
   },
   {
-    id: 'win-dev-west',
-    name: 'West Garden Window Bank',
-    roomId: 'devhub',
-    x: 10,
-    y: 110,
-    w: 18,
-    h: 320,
+    id: 'win-boardroom-east',
+    name: 'Boardroom Skyline Window',
+    roomId: 'boardroom',
+    x: 992,
+    y: 45,
+    w: 16,
+    h: 135,
+    orientation: 'vertical',
+    panes: 3,
+    isOpen: false,
+    soundType: 'courtyard_breeze',
+    soundLabel: 'Skyline Morning Breeze',
+  },
+  {
+    id: 'win-pod-east',
+    name: 'Focus Pods Acoustic Zen Garden Window',
+    roomId: 'focus_booths',
+    x: 992,
+    y: 230,
+    w: 16,
+    h: 180,
+    orientation: 'vertical',
+    panes: 3,
     isOpen: false,
     soundType: 'gentle_rain',
-    soundLabel: 'Forest Wind & Rain',
+    soundLabel: 'Zen Garden Rain',
   },
 ];
 
 // Interactive Biophilic Plants (Click to rustle leaves and emit audio)
 export const INITIAL_PLANTS = [
   { id: 'p1', name: 'Dev Hub Corner Ficus', x: 40, y: 55, radius: 22 },
-  { id: 'p2', name: 'Dev Hub South Palm', x: 35, y: 535, radius: 20 },
+  { id: 'p2', name: 'Dev Hub South Palm', x: 35, y: 530, radius: 20 },
   { id: 'p3', name: 'Dev Hub Corridor Monstera', x: 395, y: 70, radius: 24 },
   { id: 'p4', name: 'Reception Left Palm', x: 382, y: 520, radius: 18 },
   { id: 'p5', name: 'Reception Right Ficus', x: 565, y: 520, radius: 18 },
@@ -342,58 +397,63 @@ export const OFFICE_FURNITURE = {
 // Acoustic Walls for sound occlusion calculations & physical collision boundaries
 // Aligned 1:1 with the modern biophilic architectural layout
 export const INITIAL_WALLS = [
-  // 1. Exterior Boundary Walls (keeps avatar inside the office map)
-  { id: 'w-top-1', start: { x: 18, y: 16 }, end: { x: 468, y: 16 }, label: 'North Boundary 1' },
-  { id: 'w-top-2', start: { x: 544, y: 16 }, end: { x: 1000, y: 16 }, label: 'North Boundary 2' },
-  { id: 'w-bot-1', start: { x: 18, y: 552 }, end: { x: 472, y: 552 }, label: 'South Boundary 1' },
-  { id: 'w-bot-2', start: { x: 538, y: 552 }, end: { x: 1000, y: 552 }, label: 'South Boundary 2' },
-  { id: 'w-left', start: { x: 18, y: 16 }, end: { x: 18, y: 552 }, label: 'West Boundary' },
-  { id: 'w-right', start: { x: 1000, y: 16 }, end: { x: 1000, y: 552 }, label: 'East Boundary' },
+  // 1. Exterior Perimeter Structural Walls (Solid 12px structural boundaries)
+  { id: 'w-top-1', start: { x: 18, y: 16 }, end: { x: 468, y: 16 }, type: 'exterior', label: 'North Perimeter 1' },
+  { id: 'w-top-2', start: { x: 544, y: 16 }, end: { x: 1000, y: 16 }, type: 'exterior', label: 'North Perimeter 2' },
+  { id: 'w-right', start: { x: 1000, y: 16 }, end: { x: 1000, y: 552 }, type: 'exterior', label: 'East Perimeter' },
+  { id: 'w-bot-2', start: { x: 544, y: 552 }, end: { x: 1000, y: 552 }, type: 'exterior', label: 'South Perimeter 2' },
+  { id: 'w-bot-1', start: { x: 18, y: 552 }, end: { x: 472, y: 552 }, type: 'exterior', label: 'South Perimeter 1' },
+  { id: 'w-left', start: { x: 18, y: 16 }, end: { x: 18, y: 552 }, type: 'exterior', label: 'West Perimeter' },
 
   // 2. Dev Hub East Dividing Partition
-  { id: 'w-dev-e1', start: { x: 436, y: 16 }, end: { x: 436, y: 172 }, label: 'Dev Hub North-East Wall' },
-  // Doorway gap at y: 172 to 204
-  { id: 'w-dev-e2', start: { x: 436, y: 204 }, end: { x: 436, y: 365 }, label: 'Dev Hub Mid-East Wall' },
-  { id: 'w-dev-e3', start: { x: 410, y: 365 }, end: { x: 410, y: 552 }, label: 'Dev Hub South-East Wall' },
+  { id: 'w-dev-e1', start: { x: 436, y: 16 }, end: { x: 436, y: 168 }, type: 'interior', label: 'Dev Hub North-East Wall' },
+  // Doorway gap at y: 168 to 204 (door-devhub)
+  { id: 'w-dev-e2', start: { x: 436, y: 204 }, end: { x: 436, y: 365 }, type: 'interior', label: 'Dev Hub Mid-East Wall' },
+  { id: 'w-dev-e-corner', start: { x: 410, y: 365 }, end: { x: 436, y: 365 }, type: 'interior', label: 'Dev Hub Corner Transition' },
+  { id: 'w-dev-e3', start: { x: 410, y: 365 }, end: { x: 410, y: 552 }, type: 'interior', label: 'Dev Hub South-East Wall' },
 
   // 3. Central Corridor East Dividing Partition
-  { id: 'w-corr-e1', start: { x: 577, y: 16 }, end: { x: 577, y: 185 }, label: 'Corridor to Boardroom Wall' },
-  { id: 'w-corr-e2', start: { x: 577, y: 205 }, end: { x: 577, y: 365 }, label: 'Corridor to Cafeteria Wall' },
+  { id: 'w-corr-e1', start: { x: 577, y: 16 }, end: { x: 577, y: 205 }, type: 'interior', label: 'Corridor to Boardroom Wall' },
+  { id: 'w-corr-e2', start: { x: 577, y: 205 }, end: { x: 577, y: 245 }, type: 'interior', label: 'Corridor to Cafeteria Wall 1' },
+  // Open lounge archway at y: 245 to 335
+  { id: 'w-corr-e3', start: { x: 577, y: 335 }, end: { x: 577, y: 552 }, type: 'interior', label: 'Lobby to Cafeteria Wall' },
 
-  // 4. Boardroom South Glass Acoustic Partition
-  // Door gap is at x: 577 to 619
-  { id: 'w-br-s', start: { x: 619, y: 205 }, end: { x: 1000, y: 205 }, label: 'Boardroom South Glass Wall' },
+  // 4. Boardroom South Acoustic Glazed Partition
+  { id: 'w-br-s1', start: { x: 577, y: 205 }, end: { x: 585, y: 205 }, type: 'interior', label: 'Boardroom Door Left Jamb' },
+  // Door gap at x: 585 to 625 (door-boardroom)
+  { id: 'w-br-s2', start: { x: 625, y: 205 }, end: { x: 1000, y: 205 }, type: 'glass_partition', label: 'Boardroom Frosted Glass Wall' },
 
   // 5. Reception North Wall (separates corridor from lobby)
-  { id: 'w-rec-n1', start: { x: 410, y: 365 }, end: { x: 472, y: 365 }, label: 'Reception North Wall 1' },
-  { id: 'w-rec-n2', start: { x: 538, y: 365 }, end: { x: 577, y: 365 }, label: 'Reception North Wall 2' },
+  { id: 'w-rec-n1', start: { x: 410, y: 365 }, end: { x: 468, y: 365 }, type: 'interior', label: 'Reception North Wall 1' },
+  // Open atrium walkway from x: 468 to 544
+  { id: 'w-rec-n2', start: { x: 544, y: 365 }, end: { x: 577, y: 365 }, type: 'interior', label: 'Reception North Wall 2' },
 
   // 6. Focus Pods West Wall & Divider
-  { id: 'w-pod-w1', start: { x: 852, y: 205 }, end: { x: 852, y: 228 }, label: 'Focus Pod 1 Wall 1' },
-  // Door gap 1 at y: 228 to 262
-  { id: 'w-pod-w2', start: { x: 852, y: 262 }, end: { x: 852, y: 334 }, label: 'Focus Pod 1-2 Mid Wall' },
-  // Door gap 2 at y: 334 to 368
-  { id: 'w-pod-w3', start: { x: 852, y: 368 }, end: { x: 852, y: 440 }, label: 'Focus Pod 2 South Wall' },
-  { id: 'w-pod-div', start: { x: 852, y: 320 }, end: { x: 1000, y: 320 }, label: 'Focus Pod Divider Wall' },
+  { id: 'w-pod-w1', start: { x: 852, y: 205 }, end: { x: 852, y: 228 }, type: 'interior', label: 'Focus Pod 1 Wall Top' },
+  // Door gap 1 at y: 228 to 264 (door-focus-1)
+  { id: 'w-pod-w2', start: { x: 852, y: 264 }, end: { x: 852, y: 334 }, type: 'interior', label: 'Focus Pod 1-2 Mid Wall' },
+  // Door gap 2 at y: 334 to 370 (door-focus-2)
+  { id: 'w-pod-w3', start: { x: 852, y: 370 }, end: { x: 852, y: 440 }, type: 'interior', label: 'Focus Pod 2 Wall Bottom' },
+  { id: 'w-pod-div', start: { x: 852, y: 320 }, end: { x: 1000, y: 320 }, type: 'interior', label: 'Focus Pod Acoustic Divider' },
 
   // 7. Restroom North Partition
-  { id: 'w-rest-n1', start: { x: 870, y: 440 }, end: { x: 880, y: 440 }, label: 'Restroom North Wall 1' },
-  // Door gap at x: 880 to 912
-  { id: 'w-rest-n2', start: { x: 912, y: 440 }, end: { x: 1000, y: 440 }, label: 'Restroom North Wall 2' },
+  { id: 'w-rest-n1', start: { x: 852, y: 440 }, end: { x: 880, y: 440 }, type: 'interior', label: 'Restroom North Wall 1' },
+  // Door gap at x: 880 to 916 (door-restroom)
+  { id: 'w-rest-n2', start: { x: 916, y: 440 }, end: { x: 1000, y: 440 }, type: 'interior', label: 'Restroom North Wall 2' },
 
   // 8. Boardroom Table Solid Collision Core (cannot walk onto the center table slab)
-  { id: 'obs-tbl-t', start: { x: 660, y: 105 }, end: { x: 860, y: 105 }, label: 'Boardroom Table Top' },
-  { id: 'obs-tbl-b', start: { x: 660, y: 131 }, end: { x: 860, y: 131 }, label: 'Boardroom Table Bottom' },
-  { id: 'obs-tbl-l', start: { x: 660, y: 105 }, end: { x: 660, y: 131 }, label: 'Boardroom Table Left' },
-  { id: 'obs-tbl-r', start: { x: 860, y: 105 }, end: { x: 860, y: 131 }, label: 'Boardroom Table Right' },
+  { id: 'obs-tbl-t', start: { x: 660, y: 105 }, end: { x: 860, y: 105 }, type: 'furniture_obstacle', label: 'Boardroom Table Top' },
+  { id: 'obs-tbl-b', start: { x: 660, y: 131 }, end: { x: 860, y: 131 }, type: 'furniture_obstacle', label: 'Boardroom Table Bottom' },
+  { id: 'obs-tbl-l', start: { x: 660, y: 105 }, end: { x: 660, y: 131 }, type: 'furniture_obstacle', label: 'Boardroom Table Left' },
+  { id: 'obs-tbl-r', start: { x: 860, y: 105 }, end: { x: 860, y: 131 }, type: 'furniture_obstacle', label: 'Boardroom Table Right' },
 
   // 9. Workstation Pod Core Obstacles
-  { id: 'obs-desk-1', start: { x: 50, y: 115 }, end: { x: 350, y: 115 }, label: 'Dev Workstations Row 1' },
-  { id: 'obs-desk-2', start: { x: 50, y: 275 }, end: { x: 350, y: 275 }, label: 'Dev Workstations Row 2' },
-  { id: 'obs-desk-3', start: { x: 50, y: 435 }, end: { x: 350, y: 435 }, label: 'Dev Workstations Row 3' },
+  { id: 'obs-desk-1', start: { x: 50, y: 115 }, end: { x: 350, y: 115 }, type: 'furniture_obstacle', label: 'Dev Workstations Row 1' },
+  { id: 'obs-desk-2', start: { x: 50, y: 275 }, end: { x: 350, y: 275 }, type: 'furniture_obstacle', label: 'Dev Workstations Row 2' },
+  { id: 'obs-desk-3', start: { x: 50, y: 435 }, end: { x: 350, y: 435 }, type: 'furniture_obstacle', label: 'Dev Workstations Row 3' },
 
   // 10. Coffee Bar Counter Core
-  { id: 'obs-bar-1', start: { x: 655, y: 275 }, end: { x: 800, y: 275 }, label: 'Coffee Bar Counter' },
+  { id: 'obs-bar-1', start: { x: 655, y: 275 }, end: { x: 800, y: 275 }, type: 'furniture_obstacle', label: 'Coffee Bar Counter' },
 ];
 
 export const INITIAL_PEERS = [
