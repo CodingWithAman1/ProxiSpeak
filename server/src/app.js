@@ -1,7 +1,6 @@
 /**
- * Express surface (Day 1): middleware + health. The room catalogue, live
- * stats and the Spatial Audit endpoint arrive with the MongoDB/Socket.io
- * days and plug in under the same error handler.
+ * Express surface: middleware, CORS, security headers, and health monitoring.
+ * Integrates room catalogue, live presence tracking, and spatial audio gateway.
  */
 import express from 'express';
 import cors from 'cors';
@@ -14,8 +13,7 @@ export function createApp({ config: cfg = config, logger: log = logger } = {}) {
   // Reverse proxies (Nginx, PaaS routers) terminate TLS and forward
   // X-Forwarded-*; trusting one hop keeps req.ip / protocol truthful.
   app.set('trust proxy', 1);
-  // Empty CLIENT_URL on Day 1 -> reflect any origin. Once the React client
-  // exists, CLIENT_URL locks CORS down to the listed origins.
+  // Configure CORS origin handling based on CLIENT_URL config.
   app.use(cors({ origin: cfg.server.clientOrigins.length ? cfg.server.clientOrigins : true }));
   app.use(express.json({ limit: '64kb' }));
 

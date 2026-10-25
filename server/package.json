@@ -3,13 +3,13 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "ProxiSpeak — geospatial proximity audio ecosystem (Express server, Day 1 skeleton)",
+  "description": "ProxiSpeak — geospatial proximity audio ecosystem (Production Server)",
   "engines": {
     "node": ">=18.17"
   },
   "scripts": {
     "start": "node src/index.js",
-    "dev": "node --watch src/index.js"
+    "dev": "node --watch-path=src src/index.js"
   },
   "dependencies": {
     "cors": "^2.8.5",

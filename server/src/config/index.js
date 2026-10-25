@@ -2,9 +2,6 @@
  * Central configuration. Every tunable lives here and is sourced from .env
  * (server/.env wins over the repo-root .env). Nothing else in the codebase
  * reads process.env directly.
- *
- * Day 1: only the HTTP server knobs exist. Mongo/Redis/socket config blocks
- * are added on the days that actually introduce those dependencies.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -54,9 +51,7 @@ export const config = Object.freeze({
     port: num('PORT', 4000, { min: 1, max: 65535 }),
     host: str('HOST', '0.0.0.0'),
     /**
-     * Allowed browser origins (CLIENT_URL, comma separated). Empty on Day 1 =
-     * any origin may call the API; once the React client exists this locks
-     * down to the listed origins.
+     * Allowed browser origins (CLIENT_URL, comma separated).
      */
     clientOrigins: list('CLIENT_URL', 'http://localhost:5173,http://127.0.0.1:5173'),
   }),

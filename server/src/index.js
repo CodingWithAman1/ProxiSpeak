@@ -1,6 +1,6 @@
 /**
- * Boot sequence (Day 1): config -> HTTP server. MongoDB, Redis, services and
- * the Socket.io gateway are wired into this boot on their own days.
+ * ProxiSpeak Production Boot Engine: initializes database connections,
+ * HTTP server, real-time Socket.io presence gateway, and WebRTC voice mesh.
  */
 import http from 'node:http';
 import process from 'node:process';
